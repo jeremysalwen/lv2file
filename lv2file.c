@@ -169,7 +169,6 @@ int main(int argc, char** argv) {
 		arg_print_glossary_gnu(stderr, listtable);
 		arg_print_glossary_gnu(stderr, listnamestable);
 		arg_print_glossary_gnu(stderr, argtable);
-		arg_print_errors(stderr,endarg,"lol");
 		goto cleanup_argtable;
 	}
 	
@@ -272,7 +271,7 @@ int main(int argc, char** argv) {
 					while(*connectionlist) {
 						unsigned int channel=atoi(connectionlist)-1;
 						if(channel>=numchannels || channel<0) {
-							fprintf(stderr, "Input sound file does not have channel %ud.  It has %ud channels.\n",channel+1,numchannels);
+							fprintf(stderr, "Input sound file does not have channel %u.  It has %u channels.\n",channel+1,numchannels);
 							goto cleanup_outfile;
 						}
 						
