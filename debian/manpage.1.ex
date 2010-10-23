@@ -2,7 +2,7 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH LV2FILE SECTION "October 21, 2010"
+.TH LV2FILE 1 "October 21, 2010"
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .\" Some roff macros, for reference:
@@ -16,44 +16,84 @@
 .\" .sp <n>    insert n+1 empty lines
 .\" for manpage-specific macros, see man(7)
 .SH NAME
-lv2file \- program to do something
+lv2file \- Apply LV2 effects to audio files
 .SH SYNOPSIS
 .B lv2file
-.RI [ options ] " files" ...
+.RS
+.RI \-l|\-\-list
 .br
-.B bar
-.RI [ options ] " files" ...
+\-n|\-\-nameports
+.I PLUGIN
+.br
+.RI \-i
+.I INFILE
+-o
+.I OUTFILE
+[
+.I OPTIONS
+]
+.I PLUGIN
+.RE
 .SH DESCRIPTION
-This manual page documents briefly the
-.B lv2file
-and
-.B bar
-commands.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBlv2file\fP is a program that...
+lv2file is aprogram which you can use to apply effects to your audio files without much hassle. Possible use cases are:
+.RS
+* To apply an effect without having to open a GUI or start a project.
+.br
+* To apply effects to a large number of files, or in an automated manner.
+.br
+* A deterministic environment to debug a plugin.
+.br
+* Audio editing in a command-line only environment 
+.RE
+.br
+lv2file uses the LV2 plugin format (http://lv2plug.in/) for the effects it uses. 
 .SH OPTIONS
 These programs follow the usual GNU command line syntax, with long
 options starting with two dashes (`-').
 A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B \-\-list
+List all available plugins.
 .TP
-.B \-v, \-\-version
-Show version of program.
-.SH SEE ALSO
-.BR bar (1),
-.BR baz (1).
+.B \-\-nameports \fIPLUGIN\fR
+List all the input and control ports for the specified plugin.
+.TP
+.B \-i \fIFILE\fR
+Input the audio from a given FILE.  Most common sampled audio formats are supported.
+.TP
+.B \-o \fIFILE\fR
+Output to given FILE.
+.TP
+.B \-c, \-\-connect \fICHANNEL\fR:\fIPORT\fR
+Connect the channel CHANNEL in the input file to the audio port PORT of the plugin.
+If you connect multiple channels to the same port, they will be mixed together.
+The -c option is often not necessary, as lv2file will try to guess how you would like to connect the ports.
 .br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+It is possible to run multiple instances of a plugin using the syntax "-c 5:2.left" which, for example, would connect the fifth channel of audio to the port labeled "left" in the second copy of the plugin.
+You don't need to specify how many plugins to run, lv2file automatically makes enough according to the connections you make. 
+.TP
+.B \-p, \-\-parameters \fIPORT\fR:\fIVALUE\fR
+Pass values to the control ports of the plugin, essentially telling the effect how to handle the audio.
+PORT is the name of the control port, and VALUE is the value to set it to.
+For example "-p volume:1" sets the effects "volume" control to 1.
+
+You should note that because lv2file uses LV2 plugins, the VALUES will always be floating point numbers.
+It is not possible to vary a parameter with time.
+It is also not possible to have different control values for multiple plugin instances.
+Instead, split up the channels of your audio files, and process them in batches whose parameters are all the same.
+.TP
+.B [ \-m \-\-mono ]
+Mix down all of the channels together and pass them to the plugin. This will only work if the plugin has only a single audio input. This is to be used instead of manually specifying connections.
+.TP
+.B [ \-b, \-\-blocksize \fIN\fR ]
+The size of the chunks the audio is processed in.
+This might have implications for speed of processing.
+.I N
+is measured in frames, not samples.  The default is 512.
+
 .SH AUTHOR
-lv2file was written by <upstream author>.
+lv2file was written by Jeremy Salwen <jeremybubs@gmail.com>.
 .PP
 This manual page was written by Jeremy Salwen <jeremybubs@gmail.com>,
 for the Debian project (and may be used by others).
+
