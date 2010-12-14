@@ -14,7 +14,7 @@ tarball: lv2file
 .PHONY: install uninstall clean
 
 clean:
-	rm lv2file.o lv2file
+	rm -f lv2file.o lv2file
 install: all
 	$(INSTALL_PROGRAM) -d $(BINDIR) $(DESTDIR)
 	$(INSTALL_PROGRAM) lv2file $(BINDIR)/lv2file
