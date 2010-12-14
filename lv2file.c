@@ -259,29 +259,19 @@ int main(int argc, char** argv) {
 		}
 
 		{
-			unsigned int numplugins=(numin!=1 || mixdown)?1:numchannels;
-			bool connections[numplugins][numin][numchannels];
-			memset(connections,0,sizeof(connections));
-
-			SLV2Instance instances[numplugins];
+			unsigned int numplugins=1;
 			if(connectargs->count) {
-				unsigned int numplugins=1;
 				for(int i=0; i<connectargs->count; i++) {
 					const char * connectionlist=connectargs->sval[i];
 					while(*connectionlist) {
-						unsigned int channel=atoi(connectionlist)-1;
-						if(channel>=numchannels || channel<0) {
-							fprintf(stderr, "Input sound file does not have channel %u.  It has %u channels.\n",channel+1,numchannels);
-							goto cleanup_outfile;
-						}
-						
 						char* nextcomma=strchr(connectionlist,',');
+						char* nextcolon;
 						if(nextcomma) {
-							*nextcomma=0;						}
-						char* nextcolon=strchr(connectionlist,':');
-						if(nextcolon) {
-							*nextcolon=0;
+							nextcolon=memchr(connectionlist,':',nextcomma-connectionlist);	
 						} else {
+							nextcolon=strchr(connectionlist,':');
+						}
+						if(!nextcolon) {
 							fprintf(stderr, "Error parsing connection:  Expected colon between channel and port.\n");
 							goto cleanup_outfile;
 						}
@@ -289,8 +279,10 @@ int main(int argc, char** argv) {
 						unsigned int pluginstance=0;
 						char* nextperiod=strchr(nextcolon,'.');
 						if(nextperiod) {
-							*nextperiod=0;
-							pluginstance=atoi(nextcolon+1)-1;
+							char tmpbuffer[nextperiod-nextcolon+1];
+							memcpy(tmpbuffer,nextcolon,sizeof(char)*(nextperiod-nextcolon));
+							tmpbuffer[nextperiod-nextcolon]=0;
+							pluginstance=atoi(tmpbuffer);
 							if(pluginstance<0) {
 								fprintf(stderr, "Invalid plugin instance specified");
 								goto cleanup_outfile;
@@ -301,6 +293,46 @@ int main(int argc, char** argv) {
 						if(pluginstance>=numplugins) {
 							//Make sure we are instantiating enough instances of the plugin.
 							numplugins=pluginstance+1;
+						}
+						if(nextcomma) {
+							connectionlist=nextcomma+1;
+						} else {
+							break;
+						}
+					}
+				}
+			} else if(numin==1 && !mixdown) {
+				numplugins=numchannels;
+			}
+			bool connections[numplugins][numin][numchannels];
+			memset(connections,0,sizeof(connections));
+
+			SLV2Instance instances[numplugins];
+			if(connectargs->count) {
+				for(int i=0; i<connectargs->count; i++) {
+					const char * connectionlist=connectargs->sval[i];
+					while(*connectionlist) {
+						unsigned int channel=atoi(connectionlist)-1;
+						if(channel>=numchannels || channel<0) {
+							fprintf(stderr, "Input sound file does not have channel %u.  It has %u channels.\n",channel+1,numchannels);
+							goto cleanup_outfile;
+						}						
+						
+						char* nextcomma=strchr(connectionlist,',');
+						if(nextcomma) {
+							*nextcomma=0;						
+						}
+						char* nextcolon=strchr(connectionlist,':');
+						//Will not be nill otherwise it would have been caught when counting plugin instances
+						*nextcolon=0;
+						nextcolon++;
+						unsigned int pluginstance=0;
+						char* nextperiod=strchr(nextcolon,'.');
+						if(nextperiod) {
+							*nextperiod=0;
+							pluginstance=atoi(nextcolon+1)-1;
+						} else {
+							nextperiod=nextcolon;
 						}
 						bool foundmatch=false;
 						for(uint32_t port=0; port<numin; port++) {
