@@ -10,10 +10,10 @@
 //From lv2_simple_jack_host in slv2 (GPL code)
 void list_plugins(SLV2Plugins list)
 {
-        for (unsigned i=0; i < slv2_plugins_size(list); ++i) {
-                SLV2Plugin p = slv2_plugins_get_at(list, i);
-                printf("%s\n", slv2_value_as_uri(slv2_plugin_get_uri(p)));
-        }
+	for (unsigned i=0; i < slv2_plugins_size(list); ++i) {
+		SLV2Plugin p = slv2_plugins_get_at(list, i);
+		printf("%s\n", slv2_value_as_uri(slv2_plugin_get_uri(p)));
+	}
 }
 
 SLV2Plugin getplugin(const char* name, SLV2Plugins plugins, SLV2World slv2world) {
@@ -92,20 +92,20 @@ int main(int argc, char** argv) {
 		printf("Error: insufficient memory\n");
 		goto cleanup_listtable;
 	}
-	
+
 	SLV2World slv2world=slv2_world_new();
 	if(slv2world==NULL) {
 		goto cleanup_listtable;
 	}
 	slv2_world_load_all(slv2world);
 	SLV2Plugins plugins=slv2_world_get_all_plugins(slv2world); 	
-	
+
 	if(!arg_parse(argc,argv,listtable)) {
 		list_plugins(plugins);
 		goto cleanup_slv2world;
 	}
 
-	
+
 	struct arg_lit *portnames = arg_lit1("n","nameports","List the names of the input ports of a given plugin");
 	struct arg_str *pluginname = arg_str1(NULL,NULL,"plugin",NULL);
 	struct arg_end *nameend=arg_end(20);
@@ -118,8 +118,8 @@ int main(int argc, char** argv) {
 		SLV2Plugin plugin=getplugin(pluginname->sval[0],plugins,slv2world);
 		slv2_plugins_free(slv2world,plugins);
 		if(!plugin) {
-				fprintf(stderr,"No such plugin %s\n",pluginname->sval[0]);
-				goto cleanup_listnamestable;
+			fprintf(stderr,"No such plugin %s\n",pluginname->sval[0]);
+			goto cleanup_listnamestable;
 		}
 		SLV2Value input_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_INPUT);
 		SLV2Value control_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_CONTROL);
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
 	}
 
 	struct arg_rex *connectargs= arg_rexn("c","connect","(\\d+:(\\d+\\.)?\\w+,?)*","<int>:<audioport>",0,200,REG_EXTENDED,"Connect between audio file channels and plugin input channels.");
-	
+
 	struct arg_file *infile = arg_file1("i", NULL,"input", "Input sound file");
 	struct arg_file *outfile = arg_file1("o", NULL,"output", "Output sound file");
 	struct arg_rex *controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
@@ -171,7 +171,7 @@ int main(int argc, char** argv) {
 		arg_print_glossary_gnu(stderr, argtable);
 		goto cleanup_argtable;
 	}
-	
+
 	bool mixdown=mono->count;
 
 	SLV2Plugin plugin=getplugin(pluginname->sval[0],plugins,slv2world);
@@ -188,10 +188,10 @@ int main(int argc, char** argv) {
 		fprintf(stderr,"Error reading input file: %s\n",sf_error_number(sndfileerr));
 		goto cleanup_sndfile;
 	}
-	
+
 	unsigned int numchannels=formatinfo.channels;
 	unsigned int blocksize=blksize->ival[0];
-	
+
 	SLV2Value input_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_INPUT);
 	SLV2Value output_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_OUTPUT);
 	SLV2Value control_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_CONTROL);
@@ -304,6 +304,7 @@ int main(int argc, char** argv) {
 			} else if(numin==1 && !mixdown) {
 				numplugins=numchannels;
 			}
+			printf("Note: Running %i instances of the plugin.\n",numplugins);
 			bool connections[numplugins][numin][numchannels];
 			memset(connections,0,sizeof(connections));
 
@@ -317,7 +318,7 @@ int main(int argc, char** argv) {
 							fprintf(stderr, "Input sound file does not have channel %u.  It has %u channels.\n",channel+1,numchannels);
 							goto cleanup_outfile;
 						}						
-						
+
 						char* nextcomma=strchr(connectionlist,',');
 						if(nextcomma) {
 							*nextcomma=0;						
@@ -446,7 +447,6 @@ int main(int argc, char** argv) {
 						}
 					}
 				}
-				/*Here is where I would put the code to set values based on command line arguments.*/
 
 				for(int i=0; i<numplugins; i++) {
 					for(int port=0; port<numin; port++) {
@@ -461,16 +461,15 @@ int main(int argc, char** argv) {
 					for(int port=0; port<numcontrolout; port++) {
 						slv2_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
 					}
-
-					sf_count_t numread;
-					while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{
-						mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);
-						for(int plugnum=0; plugnum<numplugins; plugnum++) {
-							slv2_instance_run(instances[plugnum],blocksize);
-						}
-						interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);
-						sf_writef_float(outsndfile, sndfilebuffer, numread);
+				}
+				sf_count_t numread;
+				while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{
+					mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);
+					for(int plugnum=0; plugnum<numplugins; plugnum++) {
+						slv2_instance_run(instances[plugnum],blocksize);
 					}
+					interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);
+					sf_writef_float(outsndfile, sndfilebuffer, numread);
 				}
 			}
 
@@ -490,7 +489,7 @@ int main(int argc, char** argv) {
 		if(sf_close  (insndfile)) {
 			fprintf(stderr,"Error closing input file!\n");
 		}
-		
+
 	cleanup_argtable:
 		arg_freetable(argtable,sizeof(argtable)/sizeof(argtable[0]));
 	cleanup_listnamestable:
@@ -499,5 +498,5 @@ int main(int argc, char** argv) {
 		slv2_world_free(slv2world);  
 	cleanup_listtable:
 		arg_freetable(listtable,sizeof(listtable)/sizeof(listtable[0]));
-	 
+
 }
