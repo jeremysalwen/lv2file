@@ -17,12 +17,10 @@ Description: Command-line program to apply LV2 effects to files
  audio files without much hassle.
  .
  Possible use cases of lv2file are:
- * Apply an effect without having to open a GUI or start
-   a project.
- * Apply effects to a large number of files, or in an
-   automated manner.
- * You need a deterministic environment to debug a plugin you are developing.
- * Command-line only audio processing. 
+  * Apply an effect without having to open a GUI or start a project.
+  * Apply effects to a large number of files, or in an automated manner.
+  * You need a deterministic environment to debug a plugin you are developing.
+  * Command-line only audio processing. 
  . 
  lv2file does not come with any built-in effects, so you must install other
  packages containing LV2 plugins to use with lv2file.
