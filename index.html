@@ -3,6 +3,7 @@
 
 
 
+
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><title>jeremysalwen/lv2file @ GitHub</title>
 
 	
@@ -56,32 +57,44 @@
 </ul>
 lv2file uses the LV2 plugin format (http://lv2plug.in/) for the effects it uses.<br />
 <br />
-<h2><a name="Command_Line_Syntax" />Command Line Syntax</h2>
-lv2file can be used in the following ways:<br />
+<h2><a name="Command_Line_Syntax">Command Line Syntax</a></h2>
+<a name="Command_Line_Syntax">lv2file can be used in the following ways:<br />
 <br />
 lv2file --list 
-<ul>
-<li>Lists the available plugins</li>
+</a><ul>
+<li><a name="Command_Line_Syntax">Lists and names the available plugins</a></li>
 </ul>
-lv2file --nameports PLUGIN
-<ul>
-<li>Lists the input and control ports for plugin PLUGIN</li>
+<a name="Command_Line_Syntax">lv2file --nameports PLUGIN
+</a><ul>
+<li><a name="Command_Line_Syntax">Lists the input and control ports for plugin PLUGIN</a></li>
 </ul>
-lv2file -i IFILE -o OFILE -c CHANNEL:PORT -p PORT:VALUE PLUGIN
-<ul>
-<li>Applies the PLUGIN to to IFILE and outputs the results to OFILE. </li>
+<a name="Command_Line_Syntax">lv2file -i IFILE -o OFILE -c CHANNEL:PORT -p PORT:VALUE PLUGIN
+</a><ul>
+<li><a name="Command_Line_Syntax">Applies the PLUGIN to to IFILE and outputs the results to OFILE. </a></li>
 </ul>
-<h2><a name="Example" />Example</h2>
-<blockquote>lv2file -c 1:voice -p pitch_correction:1 -i ~/speechsample.wav -o /tmp/outfile.wav http://hyperglitch.com/dev/VocProc</blockquote>
-Applies
+<h2><a name="Example">Examples</a></h2>
+<blockquote><a name="Example">lv2file -c 1:voice -p pitch_correction:1 -i ~/speechsample.wav -o /tmp/outfile.wav http://hyperglitch.com/dev/VocProc</a></blockquote>
+<a name="Example">Applies
 the "vocproc" plugin to the file speechsample.wav, outputting it to
 /tmp/outfile.wav. It connects the first channel of the audio to the
 "voice" input on the vocproc effect, and tells vocproc to set the
 "pitch_correction" amount to 1.<br />
 <br />
-<h2><a name="Options" />Options</h2>
-<h3><a name="-c" />-c</h3>
-The
+</a>
+<blockquote><a name="Example">lv2file&nbsp; -i input.wav -o output.wav 2<br />
+</a></blockquote>
+
+<a name="Example">Applies
+the 2nd plugin to the file input.wav, outputting it to out.wav.&nbsp;
+Presumably you have looked at the output of "lv2file --list"
+beforehand, to determine which plugin is the "2nd" plugin.&nbsp; This
+is simply a convenience option, but be careful, as the numbers are
+subject to change as plugins are added or removed, and so they should
+not be treated as a permanent identifier.</a><a name="Example"><br />
+<br />
+</a><h2><a name="Options">Options</a></h2>
+<h3><a name="-c">-c</a></h3>
+<a name="-c">The
 -c option tells lv2file to connect the channel CHANNEL in the input
 file to the audio port PORT of the plugin. If you connect multiple
 channels to the same port, they will be mixed together. The -c option
@@ -94,15 +107,15 @@ connect the fifth channel of audio to the port labeled "left" in the
 second copy of the plugin. You don't need to specify how many plugins
 to run, lv2file automatically makes enough according to the connections
 you make.
-<h3><a name="-m" />-m</h3>
-There is also a -m or --mono
+</a><h3><a name="-m">-m</a></h3>
+<a name="-m">There is also a -m or --mono
 option which will simply mix down all of the channels together and pass
 them to the plugin. This will only work if the plugin has only a single
 audio input. This is to be used instead of manually specifying
 connections.<br />
 <br />
-<h3><a name="-p" />-p</h3>
-The -p option is used to pass values to the control ports of the plugin, essentially telling the effect <strong style="font-weight: normal; font-style: italic;">how</strong>
+</a><h3><a name="-p">-p</a></h3>
+<a name="-p">The -p option is used to pass values to the control ports of the plugin, essentially telling the effect <strong style="font-weight: normal; font-style: italic;">how</strong>
 to handle the audio. The syntax is simple PORT is the name of the
 control port, and VALUE is the value to set it to. For example "-p
 volume:1" sets the effects "volume" control to 1. <br />
@@ -116,27 +129,27 @@ point, but the latter will probably never be implemented. It is outside
 the scope of this program. Instead, split up the channels of your audio
 files, and process them in batches whose parameters are all the same.<br />
 <br />
-<h3><a name="-b" />-b</h3>
-Finally
+</a><h3><a name="-b">-b</a></h3>
+<a name="-b">Finally
 there is the option -b, or --blocksize, which controls the size of the
 chunks the audio is processed in. The default is 512 frames.<br />
 <br />
-<h2><a name="Underneath_the_Hood" />Underneath the Hood</h2>
-Lv2file
+</a><h2><a name="Underneath_the_Hood">Underneath the Hood</a></h2>
+<a name="Underneath_the_Hood">Lv2file
 is written in C99. It is essentially the binding together of three
 libraries: libslv2 (GPL v3), libsndfile (LGPL v3), and argtable2 (LGPL
 v2). lv2file is little more than a thin layer on top of them. So I'd
 like to thank the developers of these libraries very much.<br />
 <br />
-<h2><a name="Bugs" />Bugs</h2>
-If you encounter any bugs, please let me know, so I can fix them as soon as possible!
-<p>
+</a><h2><a name="Bugs">Bugs</a></h2>
+<a name="Bugs">If you encounter any bugs, please let me know, so I can fix them as soon as possible!
+</a><p>
 </p>
-<h2>License</h2>
-<p>GPL v3</p><h2>Download</h2>
-    <p>
-      You can download this project in either
-      <a href="http://github.com/jeremysalwen/lv2file/zipball/master">zip</a> or
+<h2><a name="Bugs">License</a></h2>
+<p><a name="Bugs">GPL v3</a></p><h2><a name="Bugs">Download</a></h2>
+<a name="Bugs">    </a><p>
+<a name="Bugs">      You can download this project in either
+      </a><a href="http://github.com/jeremysalwen/lv2file/zipball/master">zip</a> or
       <a href="http://github.com/jeremysalwen/lv2file/tarball/master">tar</a> formats.
     </p>
     <p>You can also clone the project with <a href="http://git-scm.com">Git</a>
