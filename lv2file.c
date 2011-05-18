@@ -12,7 +12,7 @@ void list_plugins(SLV2Plugins list)
 {
 	for (unsigned i=0; i < slv2_plugins_size(list); ++i) {
 		SLV2Plugin p = slv2_plugins_get_at(list, i);
-		printf("%d %s\n", i+1, slv2_value_as_uri(slv2_plugin_get_uri(p)));
+		printf("%d\t%s\n", i+1, slv2_value_as_uri(slv2_plugin_get_uri(p)));
 	}
 }
 

@@ -11,7 +11,7 @@ lv2file uses the LV2 plugin format (http://lv2plug.in/) for the effects it uses.
 lv2file can be used in the following ways:
 
 lv2file --list 
-  * Lists the available plugins
+  * Lists and numbers the available plugins
 
 lv2file --nameports PLUGIN
   * Lists the input and control ports for plugin PLUGIN
@@ -24,6 +24,10 @@ lv2file -i IFILE -o OFILE -c CHANNEL:PORT -p PORT:VALUE PLUGIN
     lv2file -c 1:voice -p pitch_correction:1 -i speechsample.wav -o outfile.wav http://hyperglitch.com/dev/VocProc
 
 Applies the "vocproc" plugin to the file speechsample.wav, outputting it to /tmp/outfile.wav.  It connects the first channel of the audio to the "voice" input on the vocproc effect, and tells vocproc to set the "pitch_correction" amount to 1.
+
+   lv2file -i speechsample.wav -o outfile.wav 2
+
+Applies the 2nd plugin to speechsample.wav, outputting to outfile.wav.  To get a listing of the plugins and their numbers, you can use lv2file --list.  Note that the number is subject to change when plugins are installed or removed, so it should not be used to permanently identify a plugin.
 
 ==Options==
 ===-c===
