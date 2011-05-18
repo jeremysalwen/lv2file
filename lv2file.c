@@ -12,15 +12,20 @@ void list_plugins(SLV2Plugins list)
 {
 	for (unsigned i=0; i < slv2_plugins_size(list); ++i) {
 		SLV2Plugin p = slv2_plugins_get_at(list, i);
-		printf("%s\n", slv2_value_as_uri(slv2_plugin_get_uri(p)));
+		printf("%d %s\n", i+1, slv2_value_as_uri(slv2_plugin_get_uri(p)));
 	}
 }
 
 SLV2Plugin getplugin(const char* name, SLV2Plugins plugins, SLV2World slv2world) {
-	SLV2Value plugin_uri = slv2_value_new_uri(slv2world, name);
-	SLV2Plugin plugin = slv2_plugins_get_by_uri(plugins, plugin_uri);
-	slv2_value_free(plugin_uri);
-	return plugin;
+	int index=atoi(name);
+	if(index!=0) {
+		return slv2_plugins_get_at(plugins,index-1);
+	} else {
+		SLV2Value plugin_uri = slv2_value_new_uri(slv2world, name);
+		SLV2Plugin plugin = slv2_plugins_get_by_uri(plugins, plugin_uri);
+		slv2_value_free(plugin_uri);
+		return plugin;
+	}
 }
 
 unsigned int popcount(bool* connections, unsigned int numchannels) {
