@@ -1,0 +1,26 @@
+Source: lv2file
+Section: sound
+Priority: optional
+Maintainer: Jeremy Salwen <jeremysalwen@gmail.com>
+Build-Depends: debhelper (>= 7.0.50~), libslv2-dev, libargtable2-dev, libsndfile-dev
+Standards-Version: 3.9.2
+Homepage: http://jeremysalwen.github.com/lv2file/
+#Vcs-Git: git://git.debian.org/collab-maint/lv2file.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/lv2file.git;a=summary
+
+Package: lv2file
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Suggests: invada-studio-plugins-lv2, lv2fil, vocproc, lv2vocoder, mda-lv2, swh-lv2
+Description: Command-line program to apply LV2 effects to files
+ lv2file is a simple program which you can use to apply LV2 effects to your
+ audio files without much hassle.
+ .
+ Possible use cases of lv2file are:
+  * Apply an effect without having to open a GUI or start a project.
+  * Apply effects to a large number of files, or in an automated manner.
+  * You need a deterministic environment to debug a plugin you are developing.
+  * Command-line only audio processing. 
+ . 
+ lv2file does not come with any built-in effects, so you must install other
+ packages containing LV2 plugins to use with lv2file.
