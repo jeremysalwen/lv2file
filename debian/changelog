@@ -1,25 +1,5 @@
-lv2file (0.7-3) unstable; urgency=low
-
-  * Bumped standards version.
-
- -- Jeremy Salwen <jeremysalwen@gmail.com>  Thu, 19 May 2011 15:31:37 -0400
-
-lv2file (0.7-2) unstable; urgency=low
-
-  * Changed manpage name.
-
- -- Jeremy Salwen <jeremysalwen@gmail.com>  Thu, 19 May 2011 03:16:25 -0400
-
 lv2file (0.7-1) unstable; urgency=low
-
-  * Added index based plugin selection
-  * Updated numbering info.
-  * updated manpage
-
- -- Jeremy Salwen <jeremysalwen@gmail.com>  Wed, 18 May 2011 17:09:33 -0400
-
-lv2file (0.6-1) unstable; urgency=low
 
   * Initial release (Closes: #600981)
 
- -- Jeremy Salwen <jeremysalwen@gmail.com>  Thu, 21 Oct 2010 23:59:00 -0400
+ -- Jeremy Salwen <jeremysalwen@gmail.com>  Thu, 19 May 2011 15:31:37 -0400
