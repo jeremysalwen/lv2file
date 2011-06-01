@@ -10,6 +10,7 @@ Homepage: http://jeremysalwen.github.com/lv2file/
 
 Package: lv2file
 Architecture: any
+Provides: lv2-host
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Suggests: invada-studio-plugins-lv2, lv2fil, vocproc, lv2vocoder, mda-lv2, swh-lv2
 Description: Command-line program to apply LV2 effects to files
