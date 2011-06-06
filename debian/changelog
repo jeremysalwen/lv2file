@@ -1,3 +1,13 @@
+lv2file (0.8-1) unstable; urgency=low
+
+  * Properly clip if audio is too loud
+  * Warn on clipping
+  * Fix error in error message when nonexistent port is specified
+  * Added provides: lv2-host
+  * Updated to 3.0 (quilt) format
+
+ -- Jeremy Salwen <jeremysalwen@gmail.com>  Mon, 06 Jun 2011 01:49:59 -0400
+
 lv2file (0.7-1) unstable; urgency=low
 
   * Initial release (Closes: #600981)

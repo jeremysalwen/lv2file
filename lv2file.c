@@ -88,7 +88,22 @@ float getstartingvalue(float dflt,float min, float max) {
 	}
 }
 
-
+inline char clipOutput(unsigned long size, float* buffer) {
+	char clipped=0;
+	for(int i=0; i<size; i++) {
+		if(buffer[i]>1) {
+			clipped=1;
+			buffer[i]=1;
+		}
+	}
+	for(int i=0; i<size; i++) {
+		if(buffer[i]<-1) {
+			clipped=true;
+			buffer[i]=-1;
+		}
+	}
+	return clipped;
+}
 int main(int argc, char** argv) {
 	struct arg_lit *listopt=arg_lit1("l", "list","Lists all available LV2 plugins");
 	struct arg_end *listend     = arg_end(20);
@@ -442,7 +457,7 @@ int main(int argc, char** argv) {
 								}
 							}
 							if(!foundmatch) {
-								fprintf(stderr, "Port with symbol %s does not exist.\n",nextcolon+1);
+								fprintf(stderr, "WARNING: Port with symbol %s does not exist.\n",parameters);
 							}
 							if(nextcomma) {
 								parameters=nextcomma+1;
@@ -467,6 +482,7 @@ int main(int argc, char** argv) {
 						slv2_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
 					}
 				}
+				char clipped=0;
 				sf_count_t numread;
 				while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{
 					mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);
@@ -474,6 +490,10 @@ int main(int argc, char** argv) {
 						slv2_instance_run(instances[plugnum],blocksize);
 					}
 					interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);
+					if(clipOutput(numread*numout,sndfilebuffer) && !clipped) {
+						clipped=1;
+						printf("WARNING: Clipping output.  Try changing parameters of the plugin to lower the output volume, or if that's not possible, try lowering the volume of the input before processing.\n");
+					}
 					sf_writef_float(outsndfile, sndfilebuffer, numread);
 				}
 			}
