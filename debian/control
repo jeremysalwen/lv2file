@@ -12,8 +12,8 @@ Package: lv2file
 Architecture: any
 Provides: lv2-host
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Suggests: invada-studio-plugins-lv2, lv2fil, vocproc, lv2vocoder, mda-lv2, swh-lv2
-Description: Command-line program to apply LV2 effects to files
+Recommends: lv2-plugin
+Description: Command-line program to apply LV2 effects to audio files
  lv2file is a simple program which you can use to apply LV2 effects to your
  audio files without much hassle.
  .
