@@ -1,0 +1,46 @@
+lv2file is a simple program which you can use to apply effects to your audio files without much hassle.  Possible use cases are:
+
+  * When you want to apply an effect without having to open a GUI or start a project.
+  * When you want to apply effects to a large number of files, or in an automated manner.
+  * When you need a deterministic environment to debug a plugin.
+  * You like everything to be on the command line.
+
+lv2file uses the LV2 plugin format (http://lv2plug.in/) for the effects it uses.
+
+==Command Line Syntax==
+lv2file can be used in the following ways:
+
+lv2file --list 
+  * Lists and numbers the available plugins
+
+lv2file --nameports PLUGIN
+  * Lists the input and control ports for plugin PLUGIN
+
+lv2file -i IFILE -o OFILE -c CHANNEL:PORT -p PORT:VALUE PLUGIN
+  * Applies the PLUGIN to to IFILE and outputs the results to OFILE. 
+
+
+==Example==
+    lv2file -c 1:voice -p pitch_correction:1 -i speechsample.wav -o outfile.wav http://hyperglitch.com/dev/VocProc
+
+Applies the "vocproc" plugin to the file speechsample.wav, outputting it to /tmp/outfile.wav.  It connects the first channel of the audio to the "voice" input on the vocproc effect, and tells vocproc to set the "pitch_correction" amount to 1.
+
+   lv2file -i speechsample.wav -o outfile.wav 2
+
+Applies the 2nd plugin to speechsample.wav, outputting to outfile.wav.  To get a listing of the plugins and their numbers, you can use lv2file --list.  Note that the number is subject to change when plugins are installed or removed, so it should not be used to permanently identify a plugin.
+
+==Options==
+===-c===
+The -c option tells lv2file to connect the channel CHANNEL in the input file to the audio port PORT of the plugin. If you connect multiple channels to the same port, they will be mixed together.  The -c option is often not necessary, as lv2file will try to guess how you would like to connect the ports.  
+
+It is possible to run multiple instances of a plugin using the syntax "-c 5:2.left" which, for example, would connect the fifth channel of audio to the port labeled "left" in the second copy of the plugin.  You don't need to specify how many plugins to run, lv2file automatically makes enough according to the connections you make.
+===-m===
+There is also a -m or --mono option which will simply mix down all of the channels together and pass them to the plugin.  This will only work if the plugin has only a single audio input.  This is to be used instead of manually specifying connections.
+
+===-p===
+The -p option is used to pass values to the control ports of the plugin, essentially telling the effect *how* to handle the audio.  The syntax is simple  PORT is the name of the control port, and VALUE is the value to set it to.  For example "-p volume:1" sets the effects "volume" control to 1.  
+
+You should note that because lv2file uses LV2 plugins, the VALUES will always be floating point numbers.  It is not possible to vary a parameter with time.  It is also not possible to have different control values for multiple plugin instances.  The former may be addressed at some future point, but the latter will probably never be implemented.  It is outside the scope of this program.  Instead, split up the channels of your audio files, and process them in batches whose parameters are all the same.
+
+===-b===
+Finally there is the option -b, or --blocksize, which controls the size of the chunks the audio is processed in.  The default is 512 frames.
