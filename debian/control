@@ -3,7 +3,10 @@ Section: sound
 Priority: optional
 Maintainer: Debian Multimedia Maintainers <pkg-multimedia-maintainers@lists.alioth.debian.org>
 Uploaders: Jeremy Salwen <jeremysalwen@gmail.com>
-Build-Depends: debhelper (>= 7.0.50~), libslv2-dev, libargtable2-dev, libsndfile-dev
+Build-Depends: debhelper (>= 7.0.50~),
+ libargtable2-dev,
+ libslv2-dev,
+ libsndfile-dev
 Standards-Version: 3.9.2
 Homepage: http://jeremysalwen.github.com/lv2file/
 Vcs-Git: git://git.debian.org/pkg-multimedia/lv2file.git
@@ -12,7 +15,8 @@ Vcs-Browser: http://git.debian.org/?p=pkg-multimedia/lv2file.git
 Package: lv2file
 Architecture: any
 Provides: lv2-host
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends},
+ ${misc:Depends}
 Recommends: lv2-plugin
 Description: Command-line program to apply LV2 effects to audio files
  lv2file is a simple program which you can use to apply LV2 effects to your
