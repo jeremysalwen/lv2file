@@ -1,12 +1,13 @@
 Source: lv2file
 Section: sound
 Priority: optional
-Maintainer: Jeremy Salwen <jeremysalwen@gmail.com>
+Maintainer: Debian Multimedia Maintainers <pkg-multimedia-maintainers@lists.alioth.debian.org>
+Uploaders: Jeremy Salwen <jeremysalwen@gmail.com>
 Build-Depends: debhelper (>= 7.0.50~), libslv2-dev, libargtable2-dev, libsndfile-dev
 Standards-Version: 3.9.2
 Homepage: http://jeremysalwen.github.com/lv2file/
-#Vcs-Git: git://git.debian.org/collab-maint/lv2file.git
-#Vcs-Browser: http://git.debian.org/?p=collab-maint/lv2file.git;a=summary
+Vcs-Git: git://git.debian.org/pkg-multimedia/lv2file.git
+Vcs-Browser: http://git.debian.org/?p=pkg-multimedia/lv2file.git
 
 Package: lv2file
 Architecture: any
