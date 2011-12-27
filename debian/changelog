@@ -1,3 +1,16 @@
+lv2file (0.82-1) unstable; urgency=low
+
+  [ Alessio Treglia ]
+  * Add gbp config file.
+  * Ease building with gbp.
+  * Moving under the umbrella of the Debian Multimedia Maintainers team.
+  * A bit of style
+
+  [ Jeremy Salwen ]
+  * Imported Upstream version 0.82
+
+ -- Jeremy Salwen <jeremysalwen@gmail.com>  Tue, 27 Dec 2011 04:04:47 -0500
+
 lv2file (0.8-2) unstable; urgency=low
 
   * Changed suggestion of several lv2 plugin packages to Recommends:
