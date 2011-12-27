@@ -10,7 +10,7 @@
 //From lv2_simple_jack_host in slv2 (GPL code)
 void list_plugins(SLV2Plugins list)
 {
-	for (unsigned i=0; i < slv2_plugins_size(list); ++i) {
+	for (unsigned int i=0; i < slv2_plugins_size(list); ++i) {
 		SLV2Plugin p = slv2_plugins_get_at(list, i);
 		printf("%d\t%s\n", i+1, slv2_value_as_uri(slv2_plugin_get_uri(p)));
 	}
@@ -30,7 +30,7 @@ SLV2Plugin getplugin(const char* name, SLV2Plugins plugins, SLV2World slv2world)
 
 unsigned int popcount(bool* connections, unsigned int numchannels) {
 	unsigned int result=0;
-	for(int i=0; i<numchannels; i++) {
+	for(unsigned int i=0; i<numchannels; i++) {
 		result+=connections[i];
 	}
 	return result;
@@ -56,16 +56,13 @@ void mix(float* buffer, sf_count_t framesread,unsigned int numchannels, unsigned
 }
 
 void interleaveoutput(sf_count_t numread, unsigned int numplugins, unsigned int numout, unsigned int blocksize, float outputbuffers[numplugins][numout][blocksize], float sndfilebuffer[numout * blocksize]) {
-	for(int plugin=0; plugin<numplugins; plugin++) {
-		for(int port=0; port<numout; port++) {
-			for(int i=0; i<numread; i++) {
+	for(unsigned int plugin=0; plugin<numplugins; plugin++) {
+		for(unsigned int port=0; port<numout; port++) {
+			for(unsigned int i=0; i<numread; i++) {
 				sndfilebuffer[plugin*numout*blocksize+i*numout+port]=outputbuffers[plugin][port][i];
 			}
 		}
 	}
-}
-
-void connectpluginbuffers(float* pluginbuffers, SLV2Instance instance) {
 }
 
 float getstartingvalue(float dflt,float min, float max) {
@@ -90,13 +87,13 @@ float getstartingvalue(float dflt,float min, float max) {
 
 inline char clipOutput(unsigned long size, float* buffer) {
 	char clipped=0;
-	for(int i=0; i<size; i++) {
+	for(unsigned int i=0; i<size; i++) {
 		if(buffer[i]>1) {
 			clipped=1;
 			buffer[i]=1;
 		}
 	}
-	for(int i=0; i<size; i++) {
+	for(unsigned int i=0; i<size; i++) {
 		if(buffer[i]<-1) {
 			clipped=true;
 			buffer[i]=-1;
@@ -222,13 +219,13 @@ int main(int argc, char** argv) {
 
 	{
 		uint32_t numports=slv2_plugin_get_num_ports(plugin);
-		int numout=0;
+		unsigned int numout=0;
 		uint32_t outindices[numports];
-		int numin=0;
+		unsigned int numin=0;
 		uint32_t inindices[numports];
-		int numcontrol=0;
+		unsigned int numcontrol=0;
 		uint32_t controlindices[numports];
-		int numcontrolout=0;
+		unsigned int numcontrolout=0;
 		uint32_t controloutindices[numports];
 
 		bool portsproblem=false;
@@ -296,13 +293,13 @@ int main(int argc, char** argv) {
 							goto cleanup_outfile;
 						}
 						nextcolon++;
-						unsigned int pluginstance=0;
+						int pluginstance=0;
 						char* nextperiod=strchr(nextcolon,'.');
 						if(nextperiod) {
 							char tmpbuffer[nextperiod-nextcolon+1];
 							memcpy(tmpbuffer,nextcolon,sizeof(char)*(nextperiod-nextcolon));
 							tmpbuffer[nextperiod-nextcolon]=0;
-							pluginstance=atoi(tmpbuffer);
+							pluginstance=atoi(tmpbuffer)-1;
 							if(pluginstance<0) {
 								fprintf(stderr, "Invalid plugin instance specified");
 								goto cleanup_outfile;
@@ -310,7 +307,7 @@ int main(int argc, char** argv) {
 						} else {
 							nextperiod=nextcolon;
 						}
-						if(pluginstance>=numplugins) {
+						if(((unsigned)pluginstance)>=numplugins) {
 							//Make sure we are instantiating enough instances of the plugin.
 							numplugins=pluginstance+1;
 						}
@@ -333,8 +330,8 @@ int main(int argc, char** argv) {
 				for(int i=0; i<connectargs->count; i++) {
 					const char * connectionlist=connectargs->sval[i];
 					while(*connectionlist) {
-						unsigned int channel=atoi(connectionlist)-1;
-						if(channel>=numchannels || channel<0) {
+						int channel=atoi(connectionlist)-1;
+						if(channel<0|| ((unsigned)channel)>=numchannels) {
 							fprintf(stderr, "Input sound file does not have channel %u.  It has %u channels.\n",channel+1,numchannels);
 							goto cleanup_outfile;
 						}						
@@ -379,24 +376,24 @@ int main(int argc, char** argv) {
 			} else {
 				if(numin==numchannels) {
 					printf("Note: Mapping audio channels to plugin ports based on ordering\n");
-					for(int i=0; i<numin; i++) {
+					for(unsigned int i=0; i<numin; i++) {
 						connections[0][i][i]=true;
 					}
 				} else if(numin==1) {
 					if(mixdown) {
 						printf("Note: Down mixing all channels to a single plugin input\n");
-						for(int i=0; i<numin; i++) {
+						for(unsigned int i=0; i<numin; i++) {
 							connections[0][0][i]=true;
 						}
 					} else {
 						printf("Note: Running an instance of the plugin per channel\n");
-						for(int i=0; i<numchannels; i++) {
+						for(unsigned int i=0; i<numchannels; i++) {
 							connections[i][0][i]=true;
 						}
 					} 
 				}else if(numchannels>numin) {
 					printf("Note: Extra channels ignored when mapping channels to plugin ports\n");
-					for(int i=0; i<numin; i++) {
+					for(unsigned int i=0; i<numin; i++) {
 						connections[0][i][i]=true;
 					}
 				} else {
@@ -404,7 +401,7 @@ int main(int argc, char** argv) {
 					goto cleanup_outfile;
 				}
 			}
-			for(int i=0; i<numplugins; i++) {
+			for(unsigned int i=0; i<numplugins; i++) {
 				instances[i]=slv2_plugin_instantiate (plugin, formatinfo.samplerate , NULL);
 				slv2_instance_activate(instances[i]); 
 			}
@@ -425,7 +422,7 @@ int main(int argc, char** argv) {
 				float defaultvalues[numports];
 
 				slv2_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
-				for(int port=0; port<numcontrol; port++) {
+				for(unsigned int port=0; port<numcontrol; port++) {
 					unsigned int portindex=controlindices[port];
 					controlports[port]=getstartingvalue(defaultvalues[portindex],minvalues[portindex],maxvalues[portindex]);
 				}
@@ -468,17 +465,17 @@ int main(int argc, char** argv) {
 					}
 				}
 
-				for(int i=0; i<numplugins; i++) {
-					for(int port=0; port<numin; port++) {
+				for(unsigned int i=0; i<numplugins; i++) {
+					for(unsigned int port=0; port<numin; port++) {
 						slv2_instance_connect_port(instances[i],inindices[port],pluginbuffers[i][port]);
 					}
-					for(int port=0; port<numout; port++) {
+					for(unsigned int port=0; port<numout; port++) {
 						slv2_instance_connect_port(instances[i],outindices[port],outputbuffers[i][port]);
 					}
-					for(int port=0; port<numcontrol; port++) {
+					for(unsigned int port=0; port<numcontrol; port++) {
 						slv2_instance_connect_port(instances[i],controlindices[port],&controlports[port]);
 					}
-					for(int port=0; port<numcontrolout; port++) {
+					for(unsigned int port=0; port<numcontrolout; port++) {
 						slv2_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
 					}
 				}
@@ -486,7 +483,7 @@ int main(int argc, char** argv) {
 				sf_count_t numread;
 				while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{
 					mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);
-					for(int plugnum=0; plugnum<numplugins; plugnum++) {
+					for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {
 						slv2_instance_run(instances[plugnum],blocksize);
 					}
 					interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);
@@ -498,8 +495,8 @@ int main(int argc, char** argv) {
 				}
 			}
 
-			cleanup_lv2:
-				for(int i=0; i<numplugins; i++) {
+			//cleanup_lv2:
+				for(unsigned int i=0; i<numplugins; i++) {
 					slv2_instance_deactivate(instances[i]);
 					slv2_instance_free(instances[i]);
 				}
