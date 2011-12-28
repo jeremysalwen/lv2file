@@ -1,10 +1,10 @@
 lv2file (0.82-1) unstable; urgency=low
 
   [ Alessio Treglia ]
-  * Add gbp config file.
-  * Ease building with gbp.
   * Moving under the umbrella of the Debian Multimedia Maintainers team.
-  * A bit of style
+  * Add myself as primary uploader.
+  * Shorten debian/rules.
+  * Update debian/copyright.
 
   [ Jeremy Salwen ]
   * Imported Upstream version 0.82
