@@ -2,7 +2,8 @@ Source: lv2file
 Section: sound
 Priority: optional
 Maintainer: Debian Multimedia Maintainers <pkg-multimedia-maintainers@lists.alioth.debian.org>
-Uploaders: Jeremy Salwen <jeremysalwen@gmail.com>
+Uploaders: Alessio Treglia <alessio@debian.org>,
+ Jeremy Salwen <jeremysalwen@gmail.com>
 Build-Depends: debhelper (>= 7.0.50~),
  libargtable2-dev,
  libslv2-dev,
