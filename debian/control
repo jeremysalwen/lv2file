@@ -2,9 +2,11 @@ Source: lv2file
 Section: sound
 Priority: optional
 Maintainer: Debian Multimedia Maintainers <pkg-multimedia-maintainers@lists.alioth.debian.org>
-Uploaders: Alessio Treglia <alessio@debian.org>,
+Uploaders:
+ Alessio Treglia <alessio@debian.org>,
  Jeremy Salwen <jeremysalwen@gmail.com>
-Build-Depends: debhelper (>= 7.0.50~),
+Build-Depends:
+ debhelper (>= 7.0.50~),
  libargtable2-dev,
  libslv2-dev,
  libsndfile-dev
@@ -15,10 +17,13 @@ Vcs-Browser: http://git.debian.org/?p=pkg-multimedia/lv2file.git
 
 Package: lv2file
 Architecture: any
-Provides: lv2-host
-Depends: ${shlibs:Depends},
- ${misc:Depends}
-Recommends: lv2-plugin
+Provides:
+ lv2-host
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends}
+Recommends:
+ lv2-plugin
 Description: Command-line program to apply LV2 effects to audio files
  lv2file is a simple program which you can use to apply LV2 effects to your
  audio files without much hassle.
@@ -27,7 +32,7 @@ Description: Command-line program to apply LV2 effects to audio files
   * Apply an effect without having to open a GUI or start a project.
   * Apply effects to a large number of files, or in an automated manner.
   * You need a deterministic environment to debug a plugin you are developing.
-  * Command-line only audio processing. 
- . 
+  * Command-line only audio processing.
+ .
  lv2file does not come with any built-in effects, so you must install other
  packages containing LV2 plugins to use with lv2file.
