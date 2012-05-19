@@ -1,5 +1,5 @@
-CFLAGS = -O3 -Wall -Wextra --std=c99 `pkg-config --cflags argtable2 sndfile slv2`
-LDLIBS = `pkg-config --libs argtable2 sndfile slv2` -lm
+CFLAGS = -O3 -Wall -Wextra --std=c99 `pkg-config --cflags argtable2 sndfile lilv-0`
+LDLIBS = `pkg-config --libs argtable2 sndfile lilv-0` -lm
 BINDIR = $(DESTDIR)/usr/bin
 INSTALL_PROGRAM = install
 
