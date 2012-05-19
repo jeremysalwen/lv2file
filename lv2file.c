@@ -2,28 +2,40 @@
 #include <stdlib.h>
 #include <sndfile.h>
 #include <argtable2.h>
-#include <slv2/slv2.h>
+#include <lilv/lilv.h>
 #include <string.h>
 #include <math.h>
 #include <regex.h>
 
 //From lv2_simple_jack_host in slv2 (GPL code)
-void list_plugins(SLV2Plugins list)
+void list_plugins(const LilvPlugins* list)
 {
-	for (unsigned int i=0; i < slv2_plugins_size(list); ++i) {
-		SLV2Plugin p = slv2_plugins_get_at(list, i);
-		printf("%d\t%s\n", i+1, slv2_value_as_uri(slv2_plugin_get_uri(p)));
+	int j=1;
+	LILV_FOREACH(plugins,i,list) {
+		const LilvPlugin* p=lilv_plugins_get(list,i);
+		printf("%d\t%s\n", j++, lilv_node_as_uri(lilv_plugin_get_uri(p)));
+
 	}
 }
+const LilvPlugin* plugins_get_at(const LilvPlugins* plugins, unsigned int n) {
+	unsigned int j=0;
+	LILV_FOREACH(plugins,i,plugins) {
+		if(j==n) {
+			return lilv_plugins_get(plugins,i);
+		}
+		j++;
+	}
+	return NULL;
+}
 
-SLV2Plugin getplugin(const char* name, SLV2Plugins plugins, SLV2World slv2world) {
+const LilvPlugin* getplugin(const char* name, const LilvPlugins* plugins, LilvWorld* lilvworld) {
 	int index=atoi(name);
 	if(index!=0) {
-		return slv2_plugins_get_at(plugins,index-1);
+		return plugins_get_at(plugins,index-1);
 	} else {
-		SLV2Value plugin_uri = slv2_value_new_uri(slv2world, name);
-		SLV2Plugin plugin = slv2_plugins_get_by_uri(plugins, plugin_uri);
-		slv2_value_free(plugin_uri);
+		LilvNode* plugin_uri = lilv_new_uri(lilvworld, name);
+		const LilvPlugin* plugin = lilv_plugins_get_by_uri(plugins, plugin_uri);
+		lilv_node_free(plugin_uri);
 		return plugin;
 	}
 }
@@ -35,6 +47,7 @@ unsigned int popcount(bool* connections, unsigned int numchannels) {
 	}
 	return result;
 }
+
 void mix(float* buffer, sf_count_t framesread,unsigned int numchannels, unsigned int numplugins, unsigned int numin, bool connections[numplugins][numin][numchannels], unsigned int blocksize, float pluginbuffers[numplugins][numin][blocksize]) {
 	for(unsigned int i=0; i<framesread; i++) {
 		for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {
@@ -89,7 +102,7 @@ inline char clipOutput(unsigned long size, float* buffer) {
 	char clipped=0;
 	for(unsigned int i=0; i<size; i++) {
 		if(buffer[i]>1) {
-			clipped=1;
+			clipped=true;
 			buffer[i]=1;
 		}
 	}
@@ -101,6 +114,68 @@ inline char clipOutput(unsigned long size, float* buffer) {
 	}
 	return clipped;
 }
+void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* plugin_name) {
+	const LilvPlugin* plugin=getplugin(plugin_name,plugins,lilvworld);
+	if(!plugin) {
+		fprintf(stderr,"No such plugin %s\n",plugin_name);
+		return;
+	}
+	LilvNode* input_class = lilv_new_uri(lilvworld, LILV_URI_INPUT_PORT);
+	LilvNode* control_class = lilv_new_uri(lilvworld, LILV_URI_CONTROL_PORT);
+	LilvNode* audio_class = lilv_new_uri(lilvworld, LILV_URI_AUDIO_PORT);
+	uint32_t numports=lilv_plugin_get_num_ports(plugin);
+	printf("==Audio Ports==\n");
+	for(uint32_t port=0; port<numports; port++) {
+		const LilvPort* p=lilv_plugin_get_port_by_index(plugin,port);
+		if(lilv_port_is_a(plugin,p,input_class) && lilv_port_is_a(plugin,p,audio_class)) {
+			printf("%s: %s\n",lilv_node_as_string(lilv_port_get_symbol(plugin,p)),lilv_node_as_string(lilv_port_get_name(plugin,p))); 			
+		}
+	}
+	printf("==Control Ports==\n");
+	for(uint32_t port=0; port<numports; port++) {
+		const LilvPort* p=lilv_plugin_get_port_by_index(plugin,port);
+		if(lilv_port_is_a(plugin,p,input_class) && lilv_port_is_a(plugin,p,control_class)) {
+			printf("%s: %s\n",lilv_node_as_string(lilv_port_get_symbol(plugin,p)),lilv_node_as_string(lilv_port_get_name(plugin,p))); 			
+		}
+	}
+	lilv_node_free(audio_class);
+	lilv_node_free(input_class);
+	lilv_node_free(control_class);
+}
+
+/* X-Macro */
+#define DEFINE_PROCESS (unsigned int blocksize, unsigned int numchannels, unsigned int numin, unsigned int numout, unsigned int numplugins, bool connections[numplugins][numin][numchannels], float pluginbuffers[numplugins][numin][blocksize], float outputbuffers[numplugins][numout][blocksize],LilvInstance* instances[numplugins],SNDFILE* insndfile, SNDFILE* outsndfile){\
+	float sndfilebuffer[numout * blocksize];\
+	float buffer[numchannels * blocksize];\
+	INITIALIZE_CLIPPED()\
+	sf_count_t numread;\
+	while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{\
+		mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);\
+		for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {\
+			lilv_instance_run(instances[plugnum],blocksize);\
+		}\
+		interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);\
+		CHECK_CLIPPED()\
+		sf_writef_float(outsndfile, sndfilebuffer, numread);\
+	}\
+}
+
+#define INITIALIZE_CLIPPED()
+#define CHECK_CLIPPED() 
+
+void process_no_check_clipping DEFINE_PROCESS
+
+#undef INITIALIZE_CLIPPED
+#define INITIALIZE_CLIPPED() char clipped=0;
+
+#undef CHECK_CLIPPED
+#define CHECK_CLIPPED() if(!clipped && clipOutput(numread*numout,sndfilebuffer)) {\
+			clipped=1;\
+			printf("WARNING: Clipping output.  Try changing parameters of the plugin to lower the output volume, or if that's not possible, try lowering the volume of the input before processing.\n");\
+		}
+
+void process_check_clipping DEFINE_PROCESS
+
 int main(int argc, char** argv) {
 	struct arg_lit *listopt=arg_lit1("l", "list","Lists all available LV2 plugins");
 	struct arg_end *listend     = arg_end(20);
@@ -110,16 +185,16 @@ int main(int argc, char** argv) {
 		goto cleanup_listtable;
 	}
 
-	SLV2World slv2world=slv2_world_new();
-	if(slv2world==NULL) {
+	LilvWorld* lilvworld=lilv_world_new();
+	if(lilvworld==NULL) {
 		goto cleanup_listtable;
 	}
-	slv2_world_load_all(slv2world);
-	SLV2Plugins plugins=slv2_world_get_all_plugins(slv2world); 	
+	lilv_world_load_all(lilvworld);
+	const LilvPlugins* plugins=lilv_world_get_all_plugins(lilvworld); 	
 
 	if(!arg_parse(argc,argv,listtable)) {
 		list_plugins(plugins);
-		goto cleanup_slv2world;
+		goto cleanup_lilvworld;
 	}
 
 
@@ -132,54 +207,30 @@ int main(int argc, char** argv) {
 		goto cleanup_listnamestable;
 	}
 	if(!arg_parse(argc,argv,listnamestable)) {
-		SLV2Plugin plugin=getplugin(pluginname->sval[0],plugins,slv2world);
-		slv2_plugins_free(slv2world,plugins);
-		if(!plugin) {
-			fprintf(stderr,"No such plugin %s\n",pluginname->sval[0]);
-			goto cleanup_listnamestable;
-		}
-		SLV2Value input_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_INPUT);
-		SLV2Value control_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_CONTROL);
-		SLV2Value audio_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_AUDIO);
-		uint32_t numports=slv2_plugin_get_num_ports(plugin);
-		printf("==Audio Ports==\n");
-		for(uint32_t port=0; port<numports; port++) {
-			SLV2Port p=slv2_plugin_get_port_by_index(plugin,port);
-			if(slv2_port_is_a(plugin,p,input_class) && slv2_port_is_a(plugin,p,audio_class)) {
-				printf("%s: %s\n",slv2_value_as_string(slv2_port_get_symbol(plugin,p)),slv2_value_as_string(slv2_port_get_name(plugin,p))); 			
-			}
-		}
-		printf("==Control Ports==\n");
-		for(uint32_t port=0; port<numports; port++) {
-			SLV2Port p=slv2_plugin_get_port_by_index(plugin,port);
-			if(slv2_port_is_a(plugin,p,input_class) && slv2_port_is_a(plugin,p,control_class)) {
-				printf("%s: %s\n",slv2_value_as_string(slv2_port_get_symbol(plugin,p)),slv2_value_as_string(slv2_port_get_name(plugin,p))); 			
-			}
-		}
-		slv2_value_free(audio_class);
-		slv2_value_free(input_class);
-		slv2_value_free(control_class);
+		list_names(lilvworld,plugins,pluginname->sval[0]);
 		goto cleanup_listnamestable;
 	}
 
 	struct arg_rex *connectargs= arg_rexn("c","connect","(\\d+:(\\d+\\.)?\\w+,?)*","<int>:<audioport>",0,200,REG_EXTENDED,"Connect between audio file channels and plugin input channels.");
 
-	struct arg_file *infile = arg_file1("i", NULL,"input", "Input sound file");
-	struct arg_file *outfile = arg_file1("o", NULL,"output", "Output sound file");
-	struct arg_rex *controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
+	struct arg_file* infile = arg_file1("i", NULL,"input", "Input sound file");
+	struct arg_file* outfile = arg_file1("o", NULL,"output", "Output sound file");
+	struct arg_rex* controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
 	pluginname = arg_str1(NULL,NULL,"plugin","The LV2 URI of the plugin");
-	struct arg_int *blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed.  This is frames, not samples.");
-	struct arg_lit *mono = arg_lit0("m","mono","Mix all of the channels together before processing.");
+	struct arg_int* blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed.  This is frames, not samples.");
+	struct arg_lit* mono = arg_lit0("m","mono","Mix all of the channels together before processing.");
+	struct arg_lit* ignore_clipping = arg_lit0(NULL,"ignore-clipping", "Do not check for clipping.  This option is slightly faster");
 	blksize->ival[0]=512;
 	struct arg_end *endarg = arg_end(20);
-	void *argtable[] = {infile, outfile,controls,connectargs,blksize,mono,pluginname, endarg};
+	void *argtable[] = {infile, outfile,controls,connectargs,blksize,mono,ignore_clipping,pluginname, endarg};
 	if (arg_nullcheck(argtable) != 0) {
 		fprintf(stderr,"Error: insufficient memory\n");
 		goto cleanup_argtable;
 	}
 	int nerrors = arg_parse(argc,argv,argtable);
 	if(nerrors) {
-		fprintf(stderr,"lv2file\t");
+		arg_print_errors(stderr,endarg,"lv2file");
+		fprintf(stderr,"usage:\nlv2file\t");
 		arg_print_syntaxv(stderr, listtable,"\n\t");
 		arg_print_syntaxv(stderr, listnamestable,"\n\t");
 		arg_print_syntaxv(stderr, argtable,"\n");
@@ -191,10 +242,9 @@ int main(int argc, char** argv) {
 
 	bool mixdown=mono->count;
 
-	SLV2Plugin plugin=getplugin(pluginname->sval[0],plugins,slv2world);
-	slv2_plugins_free(slv2world,plugins);
+	const LilvPlugin* plugin=getplugin(pluginname->sval[0],plugins,lilvworld);
 	if(!plugin) {
-		fprintf(stderr,"No such plugin %s\n",pluginname->sval[0]);
+		fprintf(stderr,"No such plugin %s\n", pluginname->sval[0]);
 		goto cleanup_argtable;
 	}
 	SF_INFO formatinfo;
@@ -209,16 +259,16 @@ int main(int argc, char** argv) {
 	unsigned int numchannels=formatinfo.channels;
 	unsigned int blocksize=blksize->ival[0];
 
-	SLV2Value input_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_INPUT);
-	SLV2Value output_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_OUTPUT);
-	SLV2Value control_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_CONTROL);
-	SLV2Value audio_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_AUDIO);
-	SLV2Value event_class = slv2_value_new_uri(slv2world, SLV2_PORT_CLASS_EVENT);
-	SLV2Value midi_class = slv2_value_new_uri(slv2world, SLV2_EVENT_CLASS_MIDI);
-	SLV2Value optional = slv2_value_new_uri(slv2world, SLV2_NAMESPACE_LV2 "connectionOptional");
+	LilvNode* input_class = lilv_new_uri(lilvworld, LILV_URI_INPUT_PORT);
+	LilvNode* output_class = lilv_new_uri(lilvworld, LILV_URI_OUTPUT_PORT);
+	LilvNode* control_class = lilv_new_uri(lilvworld, LILV_URI_CONTROL_PORT);
+	LilvNode* audio_class = lilv_new_uri(lilvworld, LILV_URI_AUDIO_PORT);
+	LilvNode* event_class = lilv_new_uri(lilvworld, LILV_URI_EVENT_PORT);
+	LilvNode* midi_class = lilv_new_uri(lilvworld, LILV_URI_MIDI_EVENT);
+	LilvNode* optional = lilv_new_uri(lilvworld, LILV_NS_LV2 "connectionOptional");
 
 	{
-		uint32_t numports=slv2_plugin_get_num_ports(plugin);
+		uint32_t numports=lilv_plugin_get_num_ports(plugin);
 		unsigned int numout=0;
 		uint32_t outindices[numports];
 		unsigned int numin=0;
@@ -230,39 +280,39 @@ int main(int argc, char** argv) {
 
 		bool portsproblem=false;
 		for(uint32_t i=0; i<numports; i++) {
-			SLV2Port porti=slv2_plugin_get_port_by_index(plugin,i);	
-			if(slv2_port_is_a(plugin,porti,audio_class)) {
-				if(slv2_port_is_a(plugin,porti,input_class)) {
+			const LilvPort* porti=lilv_plugin_get_port_by_index(plugin,i);	
+			if(lilv_port_is_a(plugin,porti,audio_class)) {
+				if(lilv_port_is_a(plugin,porti,input_class)) {
 					inindices[numin++]=i;
-				} else if(slv2_port_is_a(plugin,porti,output_class)) {
+				} else if(lilv_port_is_a(plugin,porti,output_class)) {
 					outindices[numout++]=i;
 				} else {
 					fprintf(stderr, "Audio port not input or output\n");
 					portsproblem=true;
 				}
-			} else if(slv2_port_is_a(plugin,porti,control_class)) {
+			} else if(lilv_port_is_a(plugin,porti,control_class)) {
 				//We really only care about *input* control ports.
-				if(slv2_port_is_a(plugin,porti,input_class)) {
+				if(lilv_port_is_a(plugin,porti,input_class)) {
 					controlindices[numcontrol++]=i;
-				} else if(slv2_port_is_a(plugin,porti,output_class)) {
+				} else if(lilv_port_is_a(plugin,porti,output_class)) {
 					controloutindices[numcontrolout++]=i;
 				} else {
 					fprintf(stderr, "Control port not input or output\n");
 					portsproblem=true;
 				}
-			} else if(!slv2_port_has_property(plugin,porti,optional)) {
+			} else if(!lilv_port_has_property(plugin,porti,optional)) {
 				fprintf(stderr,"Error!  Unable to handle a required port \n");
 				portsproblem=true;
 			} 
 		}
 
-		slv2_value_free(input_class);
-		slv2_value_free(output_class);
-		slv2_value_free(control_class);
-		slv2_value_free(audio_class);
-		slv2_value_free(event_class);
-		slv2_value_free(midi_class);
-		slv2_value_free(optional);
+		lilv_node_free(input_class);
+		lilv_node_free(output_class);
+		lilv_node_free(control_class);
+		lilv_node_free(audio_class);
+		lilv_node_free(event_class);
+		lilv_node_free(midi_class);
+		lilv_node_free(optional);
 		if(portsproblem) {
 			goto cleanup_sndfile;
 		}
@@ -325,7 +375,7 @@ int main(int argc, char** argv) {
 			bool connections[numplugins][numin][numchannels];
 			memset(connections,0,sizeof(connections));
 
-			SLV2Instance instances[numplugins];
+			LilvInstance* instances[numplugins];
 			if(connectargs->count) {
 				for(int i=0; i<connectargs->count; i++) {
 					const char * connectionlist=connectargs->sval[i];
@@ -355,7 +405,7 @@ int main(int argc, char** argv) {
 						bool foundmatch=false;
 						for(uint32_t port=0; port<numin; port++) {
 							//Do not need to free, kept internally.
-							const char* symbol=slv2_value_as_string(slv2_port_get_symbol(plugin,slv2_plugin_get_port_by_index(plugin,inindices[port])));
+							const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,inindices[port])));
 							if(!strcmp(symbol,nextperiod)) {
 								connections[pluginstance][port][channel]=true;
 								foundmatch=true;
@@ -402,17 +452,15 @@ int main(int argc, char** argv) {
 				}
 			}
 			for(unsigned int i=0; i<numplugins; i++) {
-				instances[i]=slv2_plugin_instantiate (plugin, formatinfo.samplerate , NULL);
-				slv2_instance_activate(instances[i]); 
+				instances[i]=lilv_plugin_instantiate (plugin, formatinfo.samplerate , NULL);
+				lilv_instance_activate(instances[i]); 
 			}
 			{
-				float buffer[numchannels * blocksize];
 				float pluginbuffers[numplugins][numin][blocksize];
 				memset(pluginbuffers,0,sizeof(pluginbuffers));
 				float outputbuffers[numplugins][numout][blocksize];
 				memset(outputbuffers,0,sizeof(outputbuffers));
 
-				float sndfilebuffer[numout * blocksize];
 				float controlports[numcontrol];
 				memset(controlports,0,sizeof(controlports));
 				float controloutports[numcontrolout];
@@ -421,7 +469,7 @@ int main(int argc, char** argv) {
 				float maxvalues[numports];
 				float defaultvalues[numports];
 
-				slv2_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
+				lilv_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
 				for(unsigned int port=0; port<numcontrol; port++) {
 					unsigned int portindex=controlindices[port];
 					controlports[port]=getstartingvalue(defaultvalues[portindex],minvalues[portindex],maxvalues[portindex]);
@@ -446,7 +494,7 @@ int main(int argc, char** argv) {
 							bool foundmatch=false;
 							for(uint32_t port=0; port<numcontrol; port++) {
 								//Do not need to free, kept internally.
-								const char* symbol=slv2_value_as_string(slv2_port_get_symbol(plugin,slv2_plugin_get_port_by_index(plugin,controlindices[port])));
+								const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,controlindices[port])));
 								if(!strcmp(symbol,parameters)) {
 									controlports[port]=value;
 									foundmatch=true;
@@ -467,38 +515,29 @@ int main(int argc, char** argv) {
 
 				for(unsigned int i=0; i<numplugins; i++) {
 					for(unsigned int port=0; port<numin; port++) {
-						slv2_instance_connect_port(instances[i],inindices[port],pluginbuffers[i][port]);
+						lilv_instance_connect_port(instances[i],inindices[port],pluginbuffers[i][port]);
 					}
 					for(unsigned int port=0; port<numout; port++) {
-						slv2_instance_connect_port(instances[i],outindices[port],outputbuffers[i][port]);
+						lilv_instance_connect_port(instances[i],outindices[port],outputbuffers[i][port]);
 					}
 					for(unsigned int port=0; port<numcontrol; port++) {
-						slv2_instance_connect_port(instances[i],controlindices[port],&controlports[port]);
+						lilv_instance_connect_port(instances[i],controlindices[port],&controlports[port]);
 					}
 					for(unsigned int port=0; port<numcontrolout; port++) {
-						slv2_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
+						lilv_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
 					}
 				}
-				char clipped=0;
-				sf_count_t numread;
-				while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{
-					mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);
-					for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {
-						slv2_instance_run(instances[plugnum],blocksize);
-					}
-					interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);
-					if(clipOutput(numread*numout,sndfilebuffer) && !clipped) {
-						clipped=1;
-						printf("WARNING: Clipping output.  Try changing parameters of the plugin to lower the output volume, or if that's not possible, try lowering the volume of the input before processing.\n");
-					}
-					sf_writef_float(outsndfile, sndfilebuffer, numread);
+				if(ignore_clipping->count) {
+					process_no_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, insndfile, outsndfile);
+				} else {
+					process_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, insndfile, outsndfile);
 				}
 			}
 
 			//cleanup_lv2:
 				for(unsigned int i=0; i<numplugins; i++) {
-					slv2_instance_deactivate(instances[i]);
-					slv2_instance_free(instances[i]);
+					lilv_instance_deactivate(instances[i]);
+					lilv_instance_free(instances[i]);
 				}
 		}
 		cleanup_outfile:
@@ -516,8 +555,8 @@ int main(int argc, char** argv) {
 		arg_freetable(argtable,sizeof(argtable)/sizeof(argtable[0]));
 	cleanup_listnamestable:
 		arg_freetable(listnamestable,sizeof(listnamestable)/sizeof(listnamestable[0]));
-	cleanup_slv2world:
-		slv2_world_free(slv2world);  
+	cleanup_lilvworld:
+		lilv_world_free(lilvworld);  
 	cleanup_listtable:
 		arg_freetable(listtable,sizeof(listtable)/sizeof(listtable[0]));
 
