@@ -48,7 +48,7 @@ lv2file is aprogram which you can use to apply effects to your audio files witho
 .br
 lv2file uses the LV2 plugin format (http://lv2plug.in/) for the effects it uses. 
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
+lv2file follows the usual GNU command line syntax, with long
 options starting with two dashes (`-').
 A summary of options is included below.
 .TP
@@ -90,6 +90,9 @@ The size of the chunks the audio is processed in.
 This might have implications for speed of processing.
 .I N
 is measured in frames, not samples.  The default is 512.
+.TP
+.B [ \-\-ignore\-clipping ]
+By default, lv2file will check every sample for clipping and will warn the user if any clipping occurs.  However, if know that the effect won't produce clipping, or you don't care if it does, you can use this option to turn off the check for clipping.  This will make lv2file run slightly faster.
 
 .SH AUTHOR
 lv2file was written by Jeremy Salwen <jeremysalwen@gmail.com>.
