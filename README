@@ -43,4 +43,7 @@ The -p option is used to pass values to the control ports of the plugin, essenti
 You should note that because lv2file uses LV2 plugins, the VALUES will always be floating point numbers.  It is not possible to vary a parameter with time.  It is also not possible to have different control values for multiple plugin instances.  The former may be addressed at some future point, but the latter will probably never be implemented.  It is outside the scope of this program.  Instead, split up the channels of your audio files, and process them in batches whose parameters are all the same.
 
 ===-b===
-Finally there is the option -b, or --blocksize, which controls the size of the chunks the audio is processed in.  The default is 512 frames.
+The option -b, or --blocksize, controls the size of the chunks the audio is processed in.  Larger sizes may be slightly faster, but will use more memory.  The default is 512 frames.
+
+===--ignore-clipping===
+By default, lv2file will check every sample for clipping and will warn the user if any clipping occurs.  However, if know that the effect won't produce clipping, or you don't care if it does, you can use this option to turn off the check for clipping.  This will make lv2file run slightly faster.

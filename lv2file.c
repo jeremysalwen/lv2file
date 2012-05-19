@@ -143,6 +143,39 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 	lilv_node_free(control_class);
 }
 
+/* X-Macro */
+#define DEFINE_PROCESS (unsigned int blocksize, unsigned int numchannels, unsigned int numin, unsigned int numout, unsigned int numplugins, bool connections[numplugins][numin][numchannels], float pluginbuffers[numplugins][numin][blocksize], float outputbuffers[numplugins][numout][blocksize],LilvInstance* instances[numplugins],SNDFILE* insndfile, SNDFILE* outsndfile){\
+	float sndfilebuffer[numout * blocksize];\
+	float buffer[numchannels * blocksize];\
+	INITIALIZE_CLIPPED()\
+	sf_count_t numread;\
+	while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{\
+		mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);\
+		for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {\
+			lilv_instance_run(instances[plugnum],blocksize);\
+		}\
+		interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);\
+		CHECK_CLIPPED()\
+		sf_writef_float(outsndfile, sndfilebuffer, numread);\
+	}\
+}
+
+#define INITIALIZE_CLIPPED()
+#define CHECK_CLIPPED() 
+
+void process_no_check_clipping DEFINE_PROCESS
+
+#undef INITIALIZE_CLIPPED
+#define INITIALIZE_CLIPPED() char clipped=0;
+
+#undef CHECK_CLIPPED
+#define CHECK_CLIPPED() if(!clipped && clipOutput(numread*numout,sndfilebuffer)) {\
+			clipped=1;\
+			printf("WARNING: Clipping output.  Try changing parameters of the plugin to lower the output volume, or if that's not possible, try lowering the volume of the input before processing.\n");\
+		}
+
+void process_check_clipping DEFINE_PROCESS
+
 int main(int argc, char** argv) {
 	struct arg_lit *listopt=arg_lit1("l", "list","Lists all available LV2 plugins");
 	struct arg_end *listend     = arg_end(20);
@@ -180,22 +213,24 @@ int main(int argc, char** argv) {
 
 	struct arg_rex *connectargs= arg_rexn("c","connect","(\\d+:(\\d+\\.)?\\w+,?)*","<int>:<audioport>",0,200,REG_EXTENDED,"Connect between audio file channels and plugin input channels.");
 
-	struct arg_file *infile = arg_file1("i", NULL,"input", "Input sound file");
-	struct arg_file *outfile = arg_file1("o", NULL,"output", "Output sound file");
-	struct arg_rex *controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
+	struct arg_file* infile = arg_file1("i", NULL,"input", "Input sound file");
+	struct arg_file* outfile = arg_file1("o", NULL,"output", "Output sound file");
+	struct arg_rex* controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
 	pluginname = arg_str1(NULL,NULL,"plugin","The LV2 URI of the plugin");
-	struct arg_int *blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed.  This is frames, not samples.");
-	struct arg_lit *mono = arg_lit0("m","mono","Mix all of the channels together before processing.");
+	struct arg_int* blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed.  This is frames, not samples.");
+	struct arg_lit* mono = arg_lit0("m","mono","Mix all of the channels together before processing.");
+	struct arg_lit* ignore_clipping = arg_lit0(NULL,"ignore-clipping", "Do not check for clipping.  This option is slightly faster");
 	blksize->ival[0]=512;
 	struct arg_end *endarg = arg_end(20);
-	void *argtable[] = {infile, outfile,controls,connectargs,blksize,mono,pluginname, endarg};
+	void *argtable[] = {infile, outfile,controls,connectargs,blksize,mono,ignore_clipping,pluginname, endarg};
 	if (arg_nullcheck(argtable) != 0) {
 		fprintf(stderr,"Error: insufficient memory\n");
 		goto cleanup_argtable;
 	}
 	int nerrors = arg_parse(argc,argv,argtable);
 	if(nerrors) {
-		fprintf(stderr,"lv2file\t");
+		arg_print_errors(stderr,endarg,"lv2file");
+		fprintf(stderr,"usage:\nlv2file\t");
 		arg_print_syntaxv(stderr, listtable,"\n\t");
 		arg_print_syntaxv(stderr, listnamestable,"\n\t");
 		arg_print_syntaxv(stderr, argtable,"\n");
@@ -421,13 +456,11 @@ int main(int argc, char** argv) {
 				lilv_instance_activate(instances[i]); 
 			}
 			{
-				float buffer[numchannels * blocksize];
 				float pluginbuffers[numplugins][numin][blocksize];
 				memset(pluginbuffers,0,sizeof(pluginbuffers));
 				float outputbuffers[numplugins][numout][blocksize];
 				memset(outputbuffers,0,sizeof(outputbuffers));
 
-				float sndfilebuffer[numout * blocksize];
 				float controlports[numcontrol];
 				memset(controlports,0,sizeof(controlports));
 				float controloutports[numcontrolout];
@@ -494,19 +527,10 @@ int main(int argc, char** argv) {
 						lilv_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
 					}
 				}
-				char clipped=0;
-				sf_count_t numread;
-				while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{
-					mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);
-					for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {
-						lilv_instance_run(instances[plugnum],blocksize);
-					}
-					interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);
-					if(!clipped && clipOutput(numread*numout,sndfilebuffer)) {
-						clipped=1;
-						printf("WARNING: Clipping output.  Try changing parameters of the plugin to lower the output volume, or if that's not possible, try lowering the volume of the input before processing.\n");
-					}
-					sf_writef_float(outsndfile, sndfilebuffer, numread);
+				if(ignore_clipping->count) {
+					process_no_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, insndfile, outsndfile);
+				} else {
+					process_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, insndfile, outsndfile);
 				}
 			}
 
