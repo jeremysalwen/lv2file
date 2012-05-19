@@ -1,3 +1,18 @@
+lv2file (0.83-1) unstable; urgency=low
+
+  [ Alessio Treglia ]
+  * Add myself as primary uploader.
+  * Shorten debian/rules.
+  * Update debian/copyright.
+  * Update
+  * wrap-and-sort
+
+  [ Jeremy Salwen ]
+  * Imported Upstream version 0.83
+  * Updated manfile
+
+ -- Jeremy Salwen <jeremysalwen@gmail.com>  Fri, 18 May 2012 22:55:39 -0400
+
 lv2file (0.82-1) unstable; urgency=low
 
   [ Alessio Treglia ]
