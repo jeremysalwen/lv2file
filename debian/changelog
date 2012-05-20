@@ -1,15 +1,12 @@
-lv2file (0.83-1) unstable; urgency=low
-
-  [ Alessio Treglia ]
-  * Add myself as primary uploader.
-  * Shorten debian/rules.
-  * Update debian/copyright.
-  * Update
-  * wrap-and-sort
+lv2file (0.83-1) UNRELEASED; urgency=low
 
   [ Jeremy Salwen ]
-  * Imported Upstream version 0.83
-  * Updated manfile
+  * New upstream release.
+
+  [ Alessio Treglia ]
+  * Replace slv2 with lilv in Build-Depends.
+  * Update debian/copyright to the machine-readable format.
+  * Bump Standards.
 
  -- Jeremy Salwen <jeremysalwen@gmail.com>  Fri, 18 May 2012 22:55:39 -0400
 
