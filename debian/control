@@ -9,7 +9,8 @@ Build-Depends:
  debhelper (>= 7.0.50~),
  libargtable2-dev,
  liblilv-dev,
- libsndfile-dev
+ libsndfile-dev,
+ lv2-dev
 Standards-Version: 3.9.3
 Homepage: http://jeremysalwen.github.com/lv2file/
 Vcs-Git: git://git.debian.org/pkg-multimedia/lv2file.git
