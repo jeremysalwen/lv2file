@@ -5,6 +5,7 @@ lv2file (0.83-1) unstable; urgency=low
 
   [ Alessio Treglia ]
   * Replace slv2 with lilv in Build-Depends.
+  * Build-Depends on lv2-dev.
   * Update debian/copyright to the machine-readable format.
   * Bump Standards.
 
