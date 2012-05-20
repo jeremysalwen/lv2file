@@ -1,4 +1,4 @@
-Format: http://svn.debian.org/wsvn/dep/web/deps/dep5.mdwn?op=file&rev=204
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: lv2file
 Upstream-Contact: Jeremy Salwen <jeremysalwen@gmail.com>
 Source:
@@ -10,7 +10,7 @@ License: GPL-2+
 
 Files: debian/*
 Copyright:
- 2011 Alessio Treglia <alessio@debian.org>
+ 2011-2012 Alessio Treglia <alessio@debian.org>
  2010 Jeremy Salwen <jeremysalwen@gmail.com>
 License: GPL-2+
 
@@ -24,7 +24,8 @@ License: GPL-2+
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  GNU General Public License for more details.
-Comment: On Debian systems, the complete text of the GNU General
+Comment:
+ On Debian systems, the complete text of the GNU General
  Public License can be found in `/usr/share/common-licenses/GPL-2'.
  .
  You should have received a copy of the GNU General Public License
