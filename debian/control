@@ -8,7 +8,7 @@ Uploaders:
 Build-Depends:
  debhelper (>= 7.0.50~),
  libargtable2-dev,
- libslv2-dev,
+ liblilv-dev,
  libsndfile-dev
 Standards-Version: 3.9.3
 Homepage: http://jeremysalwen.github.com/lv2file/
