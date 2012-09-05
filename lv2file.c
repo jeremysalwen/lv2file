@@ -6,7 +6,14 @@
 #include <string.h>
 #include <math.h>
 #include <regex.h>
+#include <ctype.h>
+#include <stdarg.h>
 
+#include "midi_input.h"
+#include "midi_output.h"
+#include "midi_common.h"
+#include "lv2/lv2plug.in/ns/ext/midi/midi.h"
+#include "lv2/lv2plug.in/ns/lv2core/lv2.h"
 //From lv2_simple_jack_host in slv2 (GPL code)
 void list_plugins(const LilvPlugins* list)
 {
@@ -29,8 +36,8 @@ const LilvPlugin* plugins_get_at(const LilvPlugins* plugins, unsigned int n) {
 }
 
 const LilvPlugin* getplugin(const char* name, const LilvPlugins* plugins, LilvWorld* lilvworld) {
-	const char* end;
-	long index=strtol(name,&end);
+	char* end;
+	long index=strtol(name,&end,10);
 	if(index!=0 && *end=='\0') {
 		return plugins_get_at(plugins,index-1);
 	}
@@ -39,16 +46,17 @@ const LilvPlugin* getplugin(const char* name, const LilvPlugins* plugins, LilvWo
 	const LilvPlugin* plugin=NULL;
 	unsigned int matches=0;
 	LILV_FOREACH(plugins, i, all_plugins) {
-		LilvPlugin* p = lilv_plugins_get(all_plugins,i);
-		if(strstr(lilv_plugin_get_uri(p),name)) {
-			printf("Note: Found matching plugin %s\n",lilv_plugin_get_uri(p));
+		const LilvPlugin* p = lilv_plugins_get(all_plugins,i);
+		const char* pname=lilv_node_as_uri(lilv_plugin_get_uri(p));
+		if(strstr(pname,name)) {
+			printf("Note: Found matching plugin %s\n",pname);
 			plugin=p;
 			matches++;
 		}
 	}
 	if(matches>1) {
 		printf("Error: found multiple matching plugins\n");
-		return null;
+		return NULL;
 	} else {
 		return plugin;
 	}
@@ -157,10 +165,10 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 	lilv_node_free(control_class);
 }
 
-void sanitize_filename(const char* input char* output) { //List of special characters from wikipedia
+void sanitize_filename(const char* input, char* output) { //List of special characters from wikipedia
 	do {
 		if(*input=='/' || 
-		*input=='\' || 
+		*input=='\\' || 
 		*input=='?' || 
 		*input=='%' ||
 		*input=='*' || 
@@ -209,34 +217,45 @@ inline miditrack* resolve_midi_track(midifile* file, const char* identifier) {
 			return &file->tracks[i].t;
 		}
 	}
-	const char* final;
+	char* final;
 	while(isspace(*identifier)) identifier++;
-	long index=strtol(identifier,&final);
+	long index=strtol(identifier,&final,10);
 	if(final==identifier) {
-		return null;
+		return NULL;
 	}
 	for(int i=0; i<file->numtracks; i++) {
 		if(file->tracks[i].t.sequence_number==index) {
 			return &file->tracks[i].t;
 		}
 	}
-	return null;
+	return NULL;
 }
 
 int my_asprintf(char** strp, const char* fmt, ...) {
-    va_args args;
+    va_list args;
     va_start(args, fmt);
     size_t needed = vsnprintf(NULL, 0, fmt, args);
     va_end(args);
-    char  *buffer = malloc(needed+1);
+    *strp = malloc(needed+1);
     va_start(args, fmt);
-    needed = snprintf(buffer, needed, fmt,args);
+    needed = snprintf(*strp, needed, fmt,args);
     va_end(args);
     return needed;
 }
 
+static LV2_URID map_uri(LV2_URID_Map_Handle handle, const char* uri)
+{
+	return symap_map((Symap*)handle, uri);
+}
+
+static const char* unmap_uri(LV2_URID_Unmap_Handle handle, LV2_URID urid)
+{
+	return symap_unmap((Symap*)handle, urid);
+}
+
+
 /* X-Macro */
-#define DEFINE_PROCESS {\
+#define DEFINE_PROCESS() {\
 	float sndfilebuffer[numout * blocksize];\
 	float buffer[numchannels * blocksize];\
 	INITIALIZE_CLIPPED()\
@@ -249,17 +268,18 @@ int my_asprintf(char** strp, const char* fmt, ...) {
 			}\
 		}\
 		absolute_frames+=numread;\
-		if(midi_error_code errn=transfer_events_before_timestamp(&midi_input_file,absolute_frames)) {\
-			midi_print_error(errn);\
+		midi_error_code errn;\
+		if((errn=transfer_events_before_timestamp(&midi_input_file,absolute_frames))) {\
+			print_midi_error(errn);\
 			goto cleanup_lv2;\
 		}\
 		for(uint32_t inst=0; inst<numplugins; numplugins++) {\
 			for(uint32_t port=0; port<nummidiin; port++) {\
-				lilv_instance_connect_port(instances[inst],midiininstance[port],midi_input_buffers[inst][port].buffer);\
+				lilv_instance_connect_port(instances[inst],midiinindices[port],midi_input_buffers[inst][port].buffer);\
 			}\
 		}\
-		if(midi_error_code errn=transfer_events_before_timestamp(&midi_input_file,absolute_frames)) {\
-			midi_print_error(errn);\
+		if((errn=transfer_events_before_timestamp(&midi_input_file,absolute_frames))) {\
+			print_midi_error(errn);\
 			goto cleanup_lv2;\
 		}\
 		mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);\
@@ -271,10 +291,10 @@ int my_asprintf(char** strp, const char* fmt, ...) {
 		sf_writef_float(outsndfile, sndfilebuffer, numread);\
 		for(uint32_t inst=0; inst<numplugins; numplugins++) {\
 			for(uint32_t port=0; port<nummidiout; port++) {\
-				LV2_Atom_Sequence* seq=MIDI_OUT_BUFFER(port);\
+				LV2_Atom_Sequence* seq=MIDI_OUT_BUFFER(inst,port);\
 				LV2_ATOM_SEQUENCE_FOREACH(seq, ev) {\
-					if(midi_error_code errn=write_MIDI_event(midi_output_files[inst][port],ev)) {\
-						midi_print_error(errn);\
+					if((errn=write_MIDI_event(&midi_output_files[inst][port],ev))) {\
+						print_midi_error(errn);\
 						goto cleanup_lv2;\
 					}\
 				}\
@@ -355,7 +375,7 @@ int main(int argc, char** argv) {
 	buffsize->ival[0]=1024;
 	outmidifile->filename[0]="./";
 	struct arg_end *endarg = arg_end(20);
-	void *argtable[] = {infile, inmidifile, outfile, outmidifile, controls, connectargs, midiconnectargs, blksize,buffsize, mono,midimono ignore_clipping, pluginname, endarg};
+	void *argtable[] = {infile, inmidifile, outfile, outmidifile, controls, connectargs, midiconnectargs, blksize, buffsize, mono, midimono, ignore_clipping, pluginname, endarg};
 	if (arg_nullcheck(argtable) != 0) {
 		fprintf(stderr,"Error: insufficient memory\n");
 		goto cleanup_argtable;
@@ -383,7 +403,7 @@ int main(int argc, char** argv) {
 	}
 	SF_INFO formatinfo;
 	formatinfo.format=0;
-	SNDFILE* insndfile=sf_open(*(infile->filename), SFM_READ, &formatinfo);
+	SNDFILE* insndfile=sf_open(infile->filename[0], SFM_READ, &formatinfo);
 	int sndfileerr=sf_error(insndfile) ;
 	if(sndfileerr) {
 		fprintf(stderr,"Error reading input file: %s\n",sf_error_number(sndfileerr));
@@ -441,7 +461,7 @@ int main(int argc, char** argv) {
 				}
 			} else if(lilv_port_is_a(plugin,porti, atomPort_class) && lilv_port_supports_event(plugin,porti, midi_class)) {
 				if(lilv_port_is_a(plugin,porti,input_class)) {
-					midiinindices[nummidiinl++]=i;
+					midiinindices[nummidiin++]=i;
 				} else if(lilv_port_is_a(plugin,porti,output_class)) {
 					midioutindices[nummidiout++]=i;
 				} else {
@@ -468,12 +488,12 @@ int main(int argc, char** argv) {
 			fprintf(stderr,"Cannot mix down audio to a single stream, as the plugin requires more than one audio input.");
 			goto cleanup_sndfile;
 		}
-		if(midimixdown && nummidiin>1) {
+		if(midi_mixdown && nummidiin>1) {
 			fprintf(stderr,"Cannot mix down MIDI to a single track, as the plugin requires more than one audio input.");
 			goto cleanup_sndfile;
 		}
 		formatinfo.channels=numout;
-		SNDFILE* outsndfile=sf_open(*(outfile->filename), SFM_WRITE, &formatinfo);
+		SNDFILE* outsndfile=sf_open(outfile->filename[0], SFM_WRITE, &formatinfo);
 
 		sndfileerr=sf_error(outsndfile) ;
 		if(sndfileerr) {
@@ -494,11 +514,11 @@ int main(int argc, char** argv) {
 		{
 			uri_mapper=symap_new();
 			map_s.handle=uri_mapper;
-			map_s.map=&symap_map;
+			map_s.map=&map_uri;
 			map_feature.URI=LV2_URID__map;
 			map_feature.data=&map_s;
 			unmap_s.handle=uri_mapper;
-			unmap_s.unmap=&symap_map;
+			unmap_s.unmap=&unmap_uri;
 			unmap_feature.URI=LV2_URID__unmap;
 			unmap_feature.data=&unmap_s;
 			if(!uri_mapper) {
@@ -510,367 +530,373 @@ int main(int argc, char** argv) {
 		midifile midi_input_file;
 		{
 			if(outmidifile->count) {
-				if(midi_error_code errn=open_midi_file(inmidifile->filename, &midi_input_file,formatinfo->samplerate))) {
-					printf(stderr,"Error initializing MIDI input: ");					
-					midi_print_error(errn);
+				midi_error_code errn;
+				if((errn=open_midi_file(inmidifile->filename[0], &midi_input_file,formatinfo.samplerate))) {
+					fprintf(stderr,"Error initializing MIDI input: ");					
+					print_midi_error(errn);
 					goto cleanup_midi_infile;
 				}
 			} else {
-				midi_input_file->numtracks=0;
-				midi_input_file->next_timestamp=UINT64_MAX;
+				midi_input_file.numtracks=0;
+				midi_input_file.next_timestamp=UINT64_MAX;
 		}
 
-
-		{
-			unsigned int numplugins=1; //First figure out the number of plugin instances to run.
-			if(connectargs->count) {
-				for(int i=0; i<connectargs->count; i++) {
-					const char * connectionlist=connectargs->sval[i];
-					while(*connectionlist) {
-						char* nextcomma=strchr(connectionlist,',');
-						char* nextcolon;
-						if(nextcomma) {
-							nextcolon=memchr(connectionlist,':',nextcomma-connectionlist);	
-						} else {
-							nextcolon=strchr(connectionlist,':');
-						}
-						if(!nextcolon) {
-							fprintf(stderr, "Error parsing connection:  Expected colon between channel and port.\n");
+		unsigned int numplugins=1; //First figure out the number of plugin instances to run.
+		if(connectargs->count) {
+			for(int i=0; i<connectargs->count; i++) {
+				const char * connectionlist=connectargs->sval[i];
+				while(*connectionlist) {
+					char* nextcomma=strchr(connectionlist,',');
+					char* nextcolon;
+					if(nextcomma) {
+						nextcolon=memchr(connectionlist,':',nextcomma-connectionlist);	
+					} else {
+						nextcolon=strchr(connectionlist,':');
+					}
+					if(!nextcolon) {
+						fprintf(stderr, "Error parsing connection:  Expected colon between channel and port.\n");
+						goto cleanup_midi_infile;
+					}
+					nextcolon++;
+					int pluginstance=0;
+					char* nextperiod=strchr(nextcolon,'.');
+					if(nextperiod) {
+						char tmpbuffer[nextperiod-nextcolon+1];
+						memcpy(tmpbuffer,nextcolon,sizeof(char)*(nextperiod-nextcolon));
+						tmpbuffer[nextperiod-nextcolon]=0;
+						pluginstance=atoi(tmpbuffer)-1;
+						if(pluginstance<0) {
+							fprintf(stderr, "Invalid plugin instance specified");
 							goto cleanup_midi_infile;
 						}
-						nextcolon++;
-						int pluginstance=0;
-						char* nextperiod=strchr(nextcolon,'.');
-						if(nextperiod) {
-							char tmpbuffer[nextperiod-nextcolon+1];
-							memcpy(tmpbuffer,nextcolon,sizeof(char)*(nextperiod-nextcolon));
-							tmpbuffer[nextperiod-nextcolon]=0;
-							pluginstance=atoi(tmpbuffer)-1;
-							if(pluginstance<0) {
-								fprintf(stderr, "Invalid plugin instance specified");
-								goto cleanup_midi_infile;
-							}
-						} else {
-							nextperiod=nextcolon;
-						}
-						if(((unsigned)pluginstance)>=numplugins) {
-							//Make sure we are instantiating enough instances of the plugin.
-							numplugins=pluginstance+1;
-						}
-						if(nextcomma) {
-							connectionlist=nextcomma+1;
-						} else {
-							break;
-						}
+					} else {
+						nextperiod=nextcolon;
+					}
+					if(((unsigned)pluginstance)>=numplugins) {
+						//Make sure we are instantiating enough instances of the plugin.
+						numplugins=pluginstance+1;
+					}
+					if(nextcomma) {
+						connectionlist=nextcomma+1;
+					} else {
+						break;
 					}
 				}
-			} else if(numin==1 && !mixdown) {
-				numplugins=numchannels;
 			}
-			printf("Note: Running %i instances of the plugin.\n",numplugins);
-
+		} else if(numin==1 && !mixdown) {
+			numplugins=numchannels;
+		}
+		printf("Note: Running %i instances of the plugin.\n",numplugins);
+		{
 			midi_output_file midi_output_files[numplugins][nummidiout];
-			{
-				memset(&midi_output_files,0,sizeof(midi_output_files));
-					
-				for(uint32_t port=0; port<nummidiout; port++) {
-					//Do not need to free, kept internally.
-					const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,inindices[port])));
-					char portname[strlen(symbol)+1];
-					sanitize_filename(symbol,portname);
-					for(uint32_t inst=0;inst<numplugins; inst++) {
-						char* fullname;
-						my_asprintf(&fullname,"%s/%s_%u.midi",inmidifile->filename,portname,inst);
-						midi_error_code errn=init_midi_output_file(&nummidiout[i],
-									fullname, 
-									formatinfo->samplerate,
-									symap_map(uri_mapper,LV2_MIDI__MidiEvent));
-						free(fullname);
-						if(errn) {
-							printf(stderr,"Error initializing MIDI output: ");					
-							midi_print_error(errn);
-							goto cleanup_midi_outfile;
-						}
-					}
-				}
-			}
-
-			bool connections[numplugins][numin][numchannels];
-			
-			memset(connections,0,sizeof(connections));
-			
-			if(connectionargs->count) {
-				for(int i=0; i<connectionargs->count; i++) {
-				const char * connectionlist=connectionargs->sval[i];
-					while(connectionlist) {
-						char* channelstr;
-						int pluginstance;
-						char* portsymb;
-						if(split_connection_arg(&connectionList, &channelstr, &pluginstance, &portsymb)) {
-							fprintf(stderr,"Malformed -c (--connect) option\n");
-							goto cleanup_midi_outfile;
-						}
-						int channel=atoi(channelstr);
-						if(channel<0 || ((unsigned)channel)>=numchannels) {
-							fprintf(stderr, "Input audio file does not have channel %u.  It has %u channels.\n",*pluginstance+1,numchannels);
-							goto cleanup_midi_outfile;
-						}
-						for(uint32_t port=0; port<numin; port++) {
-							//Do not need to free, kept internally.
-							const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,inindices[port])));
-							if(!strcmp(symbol,portsymb)) {
-								foundmatch=true;
-								if(pluginstance==-1) { //No instance specified, so we do all of them.
-									for(pluginstance=0; pluginstance<numplugins; pluginstance++) {
-										connections[pluginstance][port][channel]=true;
-									}
-								} else {
-									connections[pluginstance][port][channel]=true;
-								}
-								break;
-							}
-						}
-						if(!foundmatch) {
-							fprintf(stderr, "Error: Port with symbol %s does not exist.\n",nextcolon);
-							goto cleanup_midi_outfile;
-						}
-					}
-				}
-				printf("Note: Only making user specified audio connections.\n");
-			} else {
-				if(numin==numchannels) {
-					printf("Note: Mapping audio channels to plugin ports based on ordering\n");
-					for(unsigned int i=0; i<numin; i++) {
-						connections[0][i][i]=true;
-					}
-				} else if(numin==1) {
-					if(mixdown) {
-						printf("Note: Down mixing all channels to a single plugin input\n");
-						for(unsigned int i=0; i<numin; i++) {
-							connections[0][0][i]=true;
-						}
-					} else {
-						printf("Note: Running an instance of the plugin per channel\n");
-						for(unsigned int i=0; i<numchannels; i++) {
-							connections[i][0][i]=true;
-						}
-					} 
-				}else if(numchannels>numin) {
-					printf("Note: Extra channels ignored when mapping audio channels to plugin ports\n");
-					for(unsigned int i=0; i<numin; i++) {
-						connections[0][i][i]=true;
-					}
-				} else {
-					fprintf(stderr,"Error: Not enough input audio channels to connect all of the plugin's ports.  Please manually specify connections\n");
-					goto cleanup_midi_outfile;
-				}
-			}
-
-			event_buffer midi_input_buffers[numplugins][nummidiin];
-			{
-				for(int inst=0; inst<numplugins; inst++) {
-					for(int i=0; i<num_midi_in; i++) {
-						init_event_buffer(&midi_input_buffers[inst][i], uri_mapper,buffersize);
-					}
-				}
-			}
-
-
-			if(midiconnectionargs->count) {
-				for(int i=0; i<midiconnectionargs->count; i++) {
-				const char * connectionlist=midiconnectionargs->sval[i];
-					while(connectionlist) {
-						char* track;
-						int pluginstance;
-						char* portsymb;
-						if(split_connection_arg(&connectionList, &track, &pluginstance, &portsymb)) {
-							fprintf(stderr,"Malformed -mc (--midi-connect) option\n");
-							goto cleanup_midi_outfile;
-						}
-						miditrack* intrack=resolve_midi_track(&midi_input_file,track);
-						if(!intrack) {
-							fprintf(stderr,"Unable to find specified midi track: %s\n",track);
-							goto cleanup_midi_outfile;
-						}
-						for(uint32_t port=0; port<nummidiin; port++) {
-							//Do not need to free, kept internally.
-							const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,midiinindices[port])));
-							if(!strcmp(symbol,portsymb)) {
-								foundmatch=true;
-								if(pluginstance==-1) { //No instance specified, so we do all of them.
-									for(pluginstance=0; pluginstance<numplugins; pluginstance++) {
-										miditrack_connections_add_connection(&intrack->connections, midi_input_buffers[pluginstance][port]);
-									}
-								} else {
-									miditrack_connections_add_connection(&intrack->connections, midi_input_buffers[pluginstance][port]);
-								}
-								break;
-							}
-						}
-						if(!foundmatch) {
-							fprintf(stderr, "Error: Port with symbol %s does not exist.\n",nextcolon);
-							goto cleanup_midi_outfile;
-						}
-					}
-				}
-				printf("Note: Only making user specified midi connections.\n");
-			} else {
-				if (nummidiin==midi_input_file.numtracks) {
-					printf("Note: Connecting MIDI tracks based on ordering\n");
-					for(int track=0; track<midi_input_file.numtracks; track++) {
-						miditrack* t=&midi_input_file.tracks[track];
-						for(int inst=0; inst<numplugins; inst++) {
-							miditrack_connections_add_connection(&t->connections, midi_input_buffers[inst][midiinindicess[t->sequence_number]]);
-						}
-					}
-				}  else if(nummidiin==1) {
-					if(midimixdown) {
-						printf("Note: Mixing all MIDI tracks together for input\n");
-						for(int inst=0; inst<numplugins; inst++) {
-							for(int track=0; track<midi_input_file.numtracks; track++) {
-								miditrack_connections_add_connection(&midi_input_file.tracks[track]->connections, midi_input_buffers[inst][midiinindicess[0]]);
-							}
-						}
-					} else if(numplugins=midi_input_file.numtracks) {
-						printf("Note: Connecting each MIDI track to a different plugin instance\n");
-						for(int track=0; track<midi_input_file.numtracks; track++) {
-							miditrack* t=&midi_input_file.tracks[track];
-							miditrack_connections_add_connection(&t->connections, midi_input_buffers[track][midiinindicess[0]]);
-						}
-					} else {
-						fprintf(stderr,"Error: There are multiple MIDI tracks in the input file specified, but the plugin takes only one MIDI input.  Please manually specify your connections using --midi-connect or --midi-mono.\n");
+			memset(&midi_output_files,0,sizeof(midi_output_files));
+			for(uint32_t port=0; port<nummidiout; port++) {
+				//Do not need to free, kept internally.
+				const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,inindices[port])));
+				char portname[strlen(symbol)+1];
+				sanitize_filename(symbol,portname);
+				for(uint32_t inst=0;inst<numplugins; inst++) {
+					char* fullname;
+					my_asprintf(&fullname,"%s/%s_%u.midi",inmidifile->filename[0],portname,inst);
+					midi_error_code errn=init_midi_output_file(&midi_output_files[inst][port],
+								fullname, 
+								formatinfo.samplerate,
+								symap_map(uri_mapper,LV2_MIDI__MidiEvent));
+					free(fullname);
+					if(errn) {
+						fprintf(stderr,"Error initializing MIDI output: ");					
+						print_midi_error(errn);
 						goto cleanup_midi_outfile;
 					}
-				} else if(nummidiin<midi_input_file.numtracks) {
-					printf("Note: Extra MIDI tracks ignored when mapping tracks to plugin ports\n");
-					for(int track=0; track<midi_input_file.numtracks; track++) {
-						miditrack* t=&midi_input_file.tracks[track];
-						if(t->sequence_number<nummidiin) {			
-							for(int inst=0; inst<numplugins; inst++) {
-								miditrack_connections_add_connection(&t->connections, midi_input_buffers[inst][midiinindicess[t->sequence_number]]);
-							}
-						}
-					}
-				} else {
-					fprintf(stderr,"Error: Not enough MIDI tracks to connect all of the plugin's ports.  Please manually specify connections\n");
-					goto cleanup_midi_outfile;
 				}
-			}
-
-			
-			LilvInstance* instances[numplugins];
-			LV2_Feature* features[]={map_feature,unmap_feature,NULL};
-			for(unsigned int i=0; i<numplugins; i++) {
-				instances[i]=lilv_plugin_instantiate (plugin, formatinfo.samplerate, &features);
-				lilv_instance_activate(instances[i]); 
 			}
 			{
-				float pluginbuffers[numplugins][numin][blocksize];
-				memset(pluginbuffers,0,sizeof(pluginbuffers));
-				float outputbuffers[numplugins][numout][blocksize];
-				memset(outputbuffers,0,sizeof(outputbuffers));
-
-				float controlports[numcontrol];
-				memset(controlports,0,sizeof(controlports));
-				float controloutports[numcontrolout];
-
-				float minvalues[numports];
-				float maxvalues[numports];
-				float defaultvalues[numports];
-
-				lilv_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
-				for(unsigned int port=0; port<numcontrol; port++) {
-					unsigned int portindex=controlindices[port];
-					controlports[port]=getstartingvalue(defaultvalues[portindex],minvalues[portindex],maxvalues[portindex]);
-				}
-				if(controls->count) {
-					for(int i=0; i<controls->count; i++) {
-						const char * parameters=controls->sval[i];
-						while(*parameters) {
-							char* nextcomma=strchr(parameters,',');
-							if(nextcomma) {
-								*nextcomma=0;
-							}
-							char* nextcolon=strchr(parameters,':');
-							if(nextcolon) {
-								*nextcolon=0;
-							} else {
-								fprintf(stderr, "Error parsing parameters:  Expected colon between port and value.\n");
+				bool connections[numplugins][numin][numchannels];	
+				memset(connections,0,sizeof(connections));
+			
+				if(connectargs->count) {
+					for(int i=0; i<connectargs->count; i++) {
+					char bff[strlen(connectargs->sval[i])+1];
+					strcpy(bff,connectargs->sval[i]);
+					char* connectionlist=bff;
+						while(connectionlist) {
+							char* channelstr;
+							int pluginstance;
+							char* portsymb;
+							if(split_connection_arg(&connectionlist, &channelstr, &pluginstance, &portsymb)) {
+								fprintf(stderr,"Malformed -c (--connect) option\n");
 								goto cleanup_midi_outfile;
 							}
-							nextcolon++;
-							float value=strtof(nextcolon,NULL);
-							bool foundmatch=false;
-							for(uint32_t port=0; port<numcontrol; port++) {
+							int channel=atoi(channelstr);
+							if(channel<0 || ((unsigned)channel)>=numchannels) {
+								fprintf(stderr, "Input audio file does not have channel %u.  It has %u channels.\n",pluginstance+1,numchannels);
+								goto cleanup_midi_outfile;
+							}
+							
+	
+							bool foundmatch=0;
+							for(uint32_t port=0; port<numin; port++) {
 								//Do not need to free, kept internally.
-								const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,controlindices[port])));
-								if(!strcmp(symbol,parameters)) {
-									controlports[port]=value;
+								const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,inindices[port])));
+								if(!strcmp(symbol,portsymb)) {
 									foundmatch=true;
+									if(pluginstance==-1) { //No instance specified, so we do all of them.
+										for(pluginstance=0; (unsigned)pluginstance<numplugins; pluginstance++) {
+											connections[pluginstance][port][channel]=true;
+										}
+									} else {
+										connections[pluginstance][port][channel]=true;
+									}
 									break;
 								}
 							}
 							if(!foundmatch) {
-								fprintf(stderr, "Error: Port with symbol %s does not exist.\n",parameters);
+								fprintf(stderr, "Error: Port with symbol %s does not exist.\n",portsymb);
 								goto cleanup_midi_outfile;
-							}
-							if(nextcomma) {
-								parameters=nextcomma+1;
-							} else {
-								break;
 							}
 						}
 					}
-				}
-				uint8_t midioutbuffers[numplugins][nummidiout][buffersize];
-#define MIDI_OUT_BUFFER(i,p) ((LV2_Atom_Sequence*)midioutbuffers[i][p])
-				
-				uint32_t chunk_uri=symap_map(uri_mapper,LV2_ATOM__Chunk);
-				for(int i=0; i<numplugins; i++) {
-					for(int port=0; port<nummidiout; port++) {
-						LV2_Atom_Sequence* seq=MIDI_OUT_BUFFER(i,port);
-						seq->atom.type=chunk_uri;
-						seq->atom.size=buffersize-sizeof(LV2_Atom);
-					}
-				}
-				for(unsigned int i=0; i<numplugins; i++) {
-					for(unsigned int port=0; port<numin; port++) {
-						lilv_instance_connect_port(instances[i],inindices[port],pluginbuffers[i][port]);
-					}
-					for(unsigned int port=0; port<numout; port++) {
-						lilv_instance_connect_port(instances[i],outindices[port],outputbuffers[i][port]);
-					}
-					for(unsigned int port=0; port<numcontrol; port++) {
-						lilv_instance_connect_port(instances[i],controlindices[port],&controlports[port]);
-					}
-					for(unsigned int port=0; port<numcontrolout; port++) {
-						lilv_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
-					}
-					for(unsigned int port=0; port<nummidiout; port++) {
-						lilv_instance_connect_port(instances[i],midioutindices[i][port],MIDI_OUT_BUFFER(i,port));
-					}
-				}
-				if(ignore_clipping->count) {
-					PROCESS_NO_CHECK_CLIPPING()
+					printf("Note: Only making user specified audio connections.\n");
 				} else {
-					PROCESS_CHECK_CLIPPING()
+					if(numin==numchannels) {
+						printf("Note: Mapping audio channels to plugin ports based on ordering\n");
+						for(unsigned int i=0; i<numin; i++) {
+							connections[0][i][i]=true;
+						}
+					} else if(numin==1) {
+						if(mixdown) {
+							printf("Note: Down mixing all channels to a single plugin input\n");
+							for(unsigned int i=0; i<numin; i++) {
+								connections[0][0][i]=true;
+							}
+						} else {
+							printf("Note: Running an instance of the plugin per channel\n");
+							for(unsigned int i=0; i<numchannels; i++) {
+								connections[i][0][i]=true;
+							}
+						} 
+					}else if(numchannels>numin) {
+						printf("Note: Extra channels ignored when mapping audio channels to plugin ports\n");
+						for(unsigned int i=0; i<numin; i++) {
+							connections[0][i][i]=true;
+						}
+					} else {
+						fprintf(stderr,"Error: Not enough input audio channels to connect all of the plugin's ports.  Please manually specify connections\n");
+						goto cleanup_midi_outfile;
+					}
+				}
+				{
+					event_buffer midi_input_buffers[numplugins][nummidiin];
+					{
+						for(unsigned int inst=0; inst<numplugins; inst++) {
+							for(unsigned int i=0; i<nummidiin; i++) {
+								init_event_buffer(&midi_input_buffers[inst][i], uri_mapper,buffersize);
+							}
+						}
+					}
+	
+					if(midiconnectargs->count) {
+						for(int i=0; i<midiconnectargs->count; i++) {
+						char bff[strlen(midiconnectargs->sval[i])+1];
+						strcpy(bff,midiconnectargs->sval[i]);
+						char* connectionlist=bff;
+							while(connectionlist) {
+								char* track;
+								int pluginstance;
+								char* portsymb;
+								if(split_connection_arg(&connectionlist, &track, &pluginstance, &portsymb)) {
+									fprintf(stderr,"Malformed -mc (--midi-connect) option\n");
+									goto cleanup_midi_outfile;
+								}
+								miditrack* intrack=resolve_midi_track(&midi_input_file,track);
+								if(!intrack) {
+									fprintf(stderr,"Unable to find specified midi track: %s\n",track);
+									goto cleanup_midi_outfile;
+								}
+								bool foundmatch=false;
+								for(uint32_t port=0; port<nummidiin; port++) {
+									//Do not need to free, kept internally.
+									const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin,lilv_plugin_get_port_by_index(plugin,midiinindices[port])));
+									if(!strcmp(symbol,portsymb)) {
+										foundmatch=true;
+										if(pluginstance==-1) { //No instance specified, so we do all of them.	
+											for(pluginstance=0; (unsigned)pluginstance<numplugins; pluginstance++) {
+												miditrack_connections_add_connection(&intrack->connections, &midi_input_buffers[pluginstance][port]);
+											}
+										} else {
+											miditrack_connections_add_connection(&intrack->connections, &midi_input_buffers[pluginstance][port]);
+										}
+										break;
+									}
+								}
+								if(!foundmatch) {
+									fprintf(stderr, "Error: Port with symbol %s does not exist.\n",portsymb);
+									goto cleanup_midi_outfile;
+								}
+							}
+						}
+						printf("Note: Only making user specified midi connections.\n");
+					} else {
+						if (nummidiin==midi_input_file.numtracks) {
+							printf("Note: Connecting MIDI tracks based on ordering\n");
+							for(int track=0; track<midi_input_file.numtracks; track++) {
+								miditrack* t=&midi_input_file.tracks[track].t;
+								for(unsigned int inst=0; inst<numplugins; inst++) {
+									miditrack_connections_add_connection(&t->connections, &midi_input_buffers[inst][midiinindices[t->sequence_number]]);
+								}
+							}
+						}  else if(nummidiin==1) {
+							if(midi_mixdown) {
+								printf("Note: Mixing all MIDI tracks together for input\n");
+								for(unsigned int inst=0; inst<numplugins; inst++) {
+									for(unsigned int track=0; track<midi_input_file.numtracks; track++) {
+										miditrack_connections_add_connection(&midi_input_file.tracks[track].t.connections, &midi_input_buffers[inst][midiinindices[0]]);
+									}
+								}
+							} else if(numplugins==midi_input_file.numtracks) {
+								printf("Note: Connecting each MIDI track to a different plugin instance\n");
+								for(unsigned int track=0; track<midi_input_file.numtracks; track++) {
+									miditrack* t=&midi_input_file.tracks[track].t;
+									miditrack_connections_add_connection(&t->connections, &midi_input_buffers[track][midiinindices[0]]);
+								}
+							} else {
+								fprintf(stderr,"Error: There are multiple MIDI tracks in the input file specified, but the plugin takes only one MIDI input.  Please manually specify your connections using --midi-connect or --midi-mono.\n");
+								goto cleanup_midi_outfile;
+							}
+						} else if(nummidiin<midi_input_file.numtracks) {
+							printf("Note: Extra MIDI tracks ignored when mapping tracks to plugin ports\n");
+							for(unsigned int track=0; track<midi_input_file.numtracks; track++) {
+								miditrack* t=&midi_input_file.tracks[track].t;
+								if(t->sequence_number<nummidiin) {			
+									for(unsigned int inst=0; inst<numplugins; inst++) {
+										miditrack_connections_add_connection(&t->connections, &midi_input_buffers[inst][midiinindices[t->sequence_number]]);
+									}
+								}
+							}
+						} else {
+							fprintf(stderr,"Error: Not enough MIDI tracks to connect all of the plugin's ports.  Please manually specify connections\n");
+							goto cleanup_midi_outfile;
+						}
+					}
+		
+					{
+						LilvInstance* instances[numplugins];
+						const LV2_Feature *features[]={&map_feature,&unmap_feature,NULL};
+						for(unsigned int i=0; i<numplugins; i++) {
+							instances[i]=lilv_plugin_instantiate (plugin, formatinfo.samplerate, features);
+							lilv_instance_activate(instances[i]); 
+						}
+						float pluginbuffers[numplugins][numin][blocksize];
+						memset(pluginbuffers,0,sizeof(pluginbuffers));
+						float outputbuffers[numplugins][numout][blocksize];
+						memset(outputbuffers,0,sizeof(outputbuffers));
+		
+						float controlports[numcontrol];
+						memset(controlports,0,sizeof(controlports));
+						float controloutports[numcontrolout];
+		
+						float minvalues[numports];
+						float maxvalues[numports];
+						float defaultvalues[numports];
+		
+						lilv_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
+						for(unsigned int port=0; port<numcontrol; port++) {
+							unsigned int portindex=controlindices[port];
+							controlports[port]=getstartingvalue(defaultvalues[portindex],minvalues[portindex],maxvalues[portindex]);	
+						}
+						if(controls->count) {
+							for(int i=0; i<controls->count; i++) {
+								const char * parameters=controls->sval[i];
+								while(*parameters) {
+									char* nextcomma=strchr(parameters,',');
+									if(nextcomma) {
+										*nextcomma=0;
+									}
+									char* nextcolon=strchr(parameters,':');
+									if(nextcolon) {
+										*nextcolon=0;
+									} else {
+										fprintf(stderr, "Error parsing parameters:  Expected colon between port and value.\n");	
+										goto cleanup_midi_outfile;
+									}
+									nextcolon++;
+									float value=strtof(nextcolon,NULL);
+									bool foundmatch=false;
+									for(uint32_t port=0; port<numcontrol; port++) {
+										//Do not need to free, kept internally.
+										const char* symbol=lilv_node_as_string(lilv_port_get_symbol(plugin, lilv_plugin_get_port_by_index(plugin,controlindices[port])));
+										if(!strcmp(symbol,parameters)) {
+											controlports[port]=value;
+											foundmatch=true;
+											break;
+										}
+									}
+									if(!foundmatch) {
+										fprintf(stderr, "Error: Port with symbol %s does not exist.\n",parameters);	
+										goto cleanup_midi_outfile;
+									}
+									if(nextcomma) {
+										parameters=nextcomma+1;
+									} else {
+										break;
+									}
+								}
+							}
+						}
+						uint8_t midioutbuffers[numplugins][nummidiout][buffersize];
+#define MIDI_OUT_BUFFER(i,p) ((LV2_Atom_Sequence*)midioutbuffers[i][p])
+						
+						uint32_t chunk_uri=symap_map(uri_mapper,LV2_ATOM__Chunk);
+						for(unsigned int i=0; i<numplugins; i++) {
+							for(unsigned int port=0; port<nummidiout; port++) {
+								LV2_Atom_Sequence* seq=MIDI_OUT_BUFFER(i,port);
+								seq->atom.type=chunk_uri;
+								seq->atom.size=buffersize-sizeof(LV2_Atom);
+							}
+						}
+						for(unsigned int i=0; i<numplugins; i++) {
+							for(unsigned int port=0; port<numin; port++) {
+								lilv_instance_connect_port(instances[i],inindices[port],pluginbuffers[i][port]);
+							}
+							for(unsigned int port=0; port<numout; port++) {
+								lilv_instance_connect_port(instances[i],outindices[port],outputbuffers[i][port]);
+							}
+							for(unsigned int port=0; port<numcontrol; port++) {
+								lilv_instance_connect_port(instances[i],controlindices[port],&controlports[port]);
+							}
+							for(unsigned int port=0; port<numcontrolout; port++) {
+								lilv_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);	
+							}
+							for(unsigned int port=0; port<nummidiout; port++) {
+								LV2_Atom_Sequence* seq=MIDI_OUT_BUFFER(i,port);
+								seq->atom.type=chunk_uri;
+								seq->atom.size=buffersize-sizeof(LV2_Atom);
+								lilv_instance_connect_port(instances[i],midioutindices[port],seq);
+							}
+						}
+						if(ignore_clipping->count) {
+							PROCESS_NO_CHECK_CLIPPING()
+						} else {
+							PROCESS_CHECK_CLIPPING()
+						}
+						
+						cleanup_lv2:
+							for(unsigned int i=0; i<numplugins; i++) {
+								lilv_instance_deactivate(instances[i]);
+								lilv_instance_free(instances[i]);
+							}
+					}
 				}
 			}
-
-			cleanup_lv2:
-				for(unsigned int i=0; i<numplugins; i++) {
-					lilv_instance_deactivate(instances[i]);
-					lilv_instance_free(instances[i]);
-				}
 			cleanup_midi_outfile:
-				for(int inst=0; inst<numplugins; inst++) {
-					for(int i=0; i<nummidiout; i++) {
+				for(unsigned int inst=0; inst<numplugins; inst++) {
+					for(unsigned int i=0; i<nummidiout; i++) {
 						close_midi_output_file(&midi_output_files[inst][i]);
 					}
 				}
 		}
 		cleanup_midi_infile:
-			close_midi_input_file(&midi_input_file)
+			close_midi_input_file(&midi_input_file);
 		cleanup_symap:
 			symap_free(uri_mapper);
 		cleanup_outfile:

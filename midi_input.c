@@ -10,8 +10,30 @@
 #include <unistd.h>
 #include <stdio.h>
 
-#include "event_buffer.h"
 
+
+void mb_event_write(miditrack_connections* mb, uint8_t byte) {
+	for(int i=0; i<mb->num_buffers; i++) {
+		eb_event_write(mb->buffers[i],byte);	
+	}
+}
+
+void mb_event_start(miditrack_connections* mb, uint64_t timestamp) {
+	for(int i=0; i<mb->num_buffers; i++) {
+		eb_event_start(mb->buffers[i],timestamp);	
+	}
+}
+
+void mb_event_end(miditrack_connections* mb) {
+		for(int i=0; i<mb->num_buffers; i++) {
+		eb_event_end(mb->buffers[i]);	
+	}
+}
+
+void miditrack_connections_add_connection(miditrack_connections* c, event_buffer* b) {
+	realloc(c->buffers,c->num_buffers+1);
+	c->buffers[c->num_buffers++]=b;
+}
 
 static inline char trackgetc(miditrack* t) {
 	//printf("trackgetc %p\n",t);
@@ -392,7 +414,7 @@ void build_tree(midifile* file) {
 	}
 	
 }
-bool open_midi_file(const char* filename, midifile* header,double samplerate) {
+midi_error_code open_midi_file(const char* filename, midifile* header,double samplerate) {
 	t=NULL;//Initialize with null, so it will be safe to free, no matter what error occurs on construction.
 	FILE * f=fopen(filename,"rb");
 	if(f==NULL) {

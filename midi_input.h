@@ -1,30 +1,13 @@
+#ifndef MIDI_INPUT_H
+#define MIDI_INPUT_H
+
+#include "event_buffer.h"
+#include "midi_common.h"
 typedef struct {
 	event_buffer** buffers;
 	uint16_t num_buffers;
 } miditrack_connections;
 
-void mb_event_write(miditrack_connections* mb, uint8_t byte) {
-	for(int i=0; i<mb->num_buffers; i++) {
-		eb_event_write(mb->buffers[i],byte);	
-	}
-}
-
-void mb_event_start(miditrack_connections* mb, uint64_t timestamp) {
-	for(int i=0; i<mb->num_buffers; i++) {
-		eb_event_start(mb->buffers[i],timestamp);	
-	}
-}
-
-void mb_event_end(miditrack_connections* mb) {
-		for(int i=0; i<mb->num_buffers; i++) {
-		eb_event_end(mb->buffers[i]);	
-	}
-}
-
-void miditrack_connections_add_connection(miditrack_connections* c, event_buffer* b) {
-	realloc(c->buffers,c->num_buffers+1);
-	c->buffers[c->num_buffers++]=b;
-}
 
 typedef struct _miditrack {
 	FILE* stream;
@@ -67,4 +50,9 @@ typedef struct _midifile {
 	double sample_rate;
 } midifile;
 
+midi_error_code open_midi_file(const char* filename, midifile* header,double samplerate);
+void miditrack_connections_add_connection(miditrack_connections* c, event_buffer* b);
+midi_error_code transfer_events_before_timestamp(midifile* f, uint64_t timestamp);
+midi_error_code close_midi_input_file(midifile* file);
 
+#endif

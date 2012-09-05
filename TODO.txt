@@ -1,2 +1,4 @@
 * Support port-groups extension for nicely grouping ports when asked to list them.
 * Support presets extension.
+* Support Latency Compensation
+* Support minimum buffer size extension

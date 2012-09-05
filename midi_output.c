@@ -1,15 +1,3 @@
-typedef struct {
-	FILE* out;
-	fpos_t length_offset; //This will keep track of the location in the file where we need to update the length after we have written the rest of the file
-	uint64_t length; //this will keep track of the bytes written to the track.
-	
-	int64_t last_timestamp;
-	float fractional_tick_error;
-	float ticks_per_sample;
-
-	LV2_URID midi_event_type;
-} midi_output_file;
-
 
 void write_BE_int(FILE* f,uint32_t i) {
 	fputc((i&0xFF000000)>>24,f);
