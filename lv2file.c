@@ -34,6 +34,9 @@ const LilvPlugin* getplugin(const char* name, const LilvPlugins* plugins, LilvWo
 		return plugins_get_at(plugins,index-1);
 	} else {
 		LilvNode* plugin_uri = lilv_new_uri(lilvworld, name);
+		if(!plugin_uri) {
+			return NULL;
+		}
 		const LilvPlugin* plugin = lilv_plugins_get_by_uri(plugins, plugin_uri);
 		lilv_node_free(plugin_uri);
 		return plugin;
