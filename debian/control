@@ -13,8 +13,8 @@ Build-Depends:
  lv2-dev
 Standards-Version: 3.9.3
 Homepage: http://jeremysalwen.github.com/lv2file/
-Vcs-Git: git://git.debian.org/pkg-multimedia/lv2file.git
-Vcs-Browser: http://git.debian.org/?p=pkg-multimedia/lv2file.git
+Vcs-Git: https://salsa.debian.org/multimedia-team/lv2file.git
+Vcs-Browser: https://salsa.debian.org/multimedia-team/lv2file
 
 Package: lv2file
 Architecture: any
