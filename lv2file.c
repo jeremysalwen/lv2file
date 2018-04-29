@@ -47,6 +47,7 @@ static char **urimap = NULL;
 static uint32_t urimap_len = 0;
 
 static uint32_t uri_to_id(LV2_URI_Map_Callback_Data unused, const char* uri) {
+  (void) unused;
   for (uint32_t i = 0; i < urimap_len; ++i) {
     if (!strcmp(urimap[i], uri)) {
       return i + 1;
@@ -94,7 +95,7 @@ lv2_worker_schedule(LV2_Worker_Schedule_Handle handle,
  */
 struct statehelper {
 	const LilvPlugin* plugin;
-	int               numports;
+	uint32_t          numports;
 	float*            params;
 };
 
@@ -108,6 +109,7 @@ set_port_value(const char* port_symbol,
 	if (type != 0 && type != uri_to_id(NULL, "http://lv2plug.in/ns/ext/atom#Float")) {
 		return;
 	}
+	(void) size; // unused
 	float val = *(const float*)value;
 	//printf ("STATE set %s to %f (t: %d)\n", port_symbol, val, type);
 	struct statehelper* sh = (struct statehelper*) user_data;
