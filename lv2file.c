@@ -316,6 +316,8 @@ int main(int argc, char** argv) {
 	LilvNode* event_class = lilv_new_uri(lilvworld, LILV_URI_EVENT_PORT);
 	LilvNode* midi_class = lilv_new_uri(lilvworld, LILV_URI_MIDI_EVENT);
 	LilvNode* optional = lilv_new_uri(lilvworld, LILV_NS_LV2 "connectionOptional");
+	LilvNode* freewheel_port = lilv_new_uri(lilvworld, LV2_CORE__freeWheeling);
+	LilvNode* latency_port = lilv_new_uri(lilvworld, LV2_CORE__reportsLatency);
 	LilvNode* atom_AtomPort = lilv_new_uri(lilvworld, LV2_ATOM__AtomPort);
 	LilvNode* atom_Sequence = lilv_new_uri(lilvworld, LV2_ATOM__Sequence);
 	SF_INFO formatinfo;
@@ -343,6 +345,7 @@ int main(int argc, char** argv) {
 		uint32_t controloutindices[numports];
 
 		bool portsproblem=false;
+		int fwheelportidx = -1;
 		for(uint32_t i=0; i<numports; i++) {
 			const LilvPort* porti=lilv_plugin_get_port_by_index(plugin,i);
 			if(lilv_port_is_a(plugin,porti,audio_class)) {
@@ -358,7 +361,13 @@ int main(int argc, char** argv) {
 				//We really only care about *input* control ports.
 				if(lilv_port_is_a(plugin,porti,input_class)) {
 					controlindices[numcontrol++]=i;
+					if (lilv_port_has_property(plugin, porti, freewheel_port)) {
+						fwheelportidx = i;
+					}
 				} else if(lilv_port_is_a(plugin,porti,output_class)) {
+					if (lilv_port_has_property(plugin, porti, latency_port)) {
+						// TODO: remember this port, use its value later (ignore first N output samples)
+					}
 					controloutindices[numcontrolout++]=i;
 				} else {
 					fprintf(stderr, "Control port not input or output\n");
@@ -560,6 +569,11 @@ int main(int argc, char** argv) {
 					unsigned int portindex=controlindices[port];
 					controlports[port]=getstartingvalue(defaultvalues[portindex],minvalues[portindex],maxvalues[portindex]);
 				}
+
+				if (fwheelportidx >= 0) {
+					controlports[fwheelportidx] = 1;
+				}
+
 				if(controls->count) {
 					for(int i=0; i<controls->count; i++) {
 						const char * parameters=controls->sval[i];
@@ -663,6 +677,8 @@ int main(int argc, char** argv) {
 		lilv_node_free(event_class);
 		lilv_node_free(midi_class);
 		lilv_node_free(optional);
+		lilv_node_free(freewheel_port);
+		lilv_node_free(latency_port);
 		lilv_node_free(atom_AtomPort);
 		lilv_node_free(atom_Sequence);
 
