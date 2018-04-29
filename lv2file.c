@@ -34,6 +34,7 @@
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/buf-size/buf-size.h"
 #include "lv2/lv2plug.in/ns/ext/options/options.h"
+#include "lv2/lv2plug.in/ns/ext/worker/worker.h"
 
 static const size_t atom_capacity = 32768;
 
@@ -60,6 +61,31 @@ static void free_uri_map() {
     free(urimap[i]);
   }
   free(urimap);
+}
+
+/* ****************************************************************************
+ * LV2 Worker
+ */
+static LV2_Worker_Interface* worker_iface = NULL;
+
+static LV2_Worker_Status
+lv2_worker_respond(LV2_Worker_Respond_Handle handle,
+                   uint32_t                  size,
+                   const void*               data)
+{
+	worker_iface->work_response(handle, size, data);
+	return LV2_WORKER_SUCCESS;
+}
+
+static LV2_Worker_Status
+lv2_worker_schedule(LV2_Worker_Schedule_Handle handle,
+                    uint32_t                   size,
+                    const void*                data)
+{
+	printf ("lv2_worker_schedule..\n");
+	/* all processing is non-realtime, scheduled work can be executed immediately */
+	worker_iface->work(handle, lv2_worker_respond, handle, size, data);
+	return LV2_WORKER_SUCCESS;
 }
 
 //From lv2_simple_jack_host in slv2 (GPL code)
@@ -320,6 +346,8 @@ int main(int argc, char** argv) {
 	LilvNode* latency_port = lilv_new_uri(lilvworld, LV2_CORE__reportsLatency);
 	LilvNode* atom_AtomPort = lilv_new_uri(lilvworld, LV2_ATOM__AtomPort);
 	LilvNode* atom_Sequence = lilv_new_uri(lilvworld, LV2_ATOM__Sequence);
+	LilvNode* worker_schedule = lilv_new_uri(lilvworld, LV2_WORKER__schedule);
+	LilvNode* worker_iface_uri = lilv_new_uri(lilvworld, LV2_WORKER__interface);
 	SF_INFO formatinfo;
 	formatinfo.format=0;
 	SNDFILE* insndfile=sf_open(*(infile->filename), SFM_READ, &formatinfo);
@@ -520,6 +548,8 @@ int main(int argc, char** argv) {
 				}
 			}
 
+			bool has_worker = lilv_plugin_has_feature (plugin, worker_schedule) && lilv_plugin_has_extension_data(plugin, worker_iface_uri);
+
 			LV2_URID atom_Int = uri_to_id(NULL, LV2_ATOM__Int);
 			LV2_Options_Option options[] = {
 				{ LV2_OPTIONS_INSTANCE, 0, uri_to_id(NULL, LV2_BUF_SIZE__minBlockLength),
@@ -546,8 +576,31 @@ int main(int argc, char** argv) {
 				features[1] = &unmap_feature;
 				features[2] = &options_feature;
 
+				LV2_Worker_Schedule* schedule = NULL;
+				if (has_worker) {
+					schedule = (LV2_Worker_Schedule*)malloc(sizeof(LV2_Worker_Schedule));
+					schedule->handle        = NULL;
+					schedule->schedule_work = lv2_worker_schedule;
+
+					const LV2_Feature schedule_feature = { LV2_WORKER__schedule, schedule };
+					features[n_features++]  = &schedule_feature;
+				}
+
 				features[n_features] = NULL;
+
 				instances[i] = lilv_plugin_instantiate (plugin, formatinfo.samplerate, features);
+
+				if (!instances[i]) {
+					fprintf(stderr,"Failed to instantiate plugin!\n");
+					goto cleanup_outfile;
+				}
+
+				if (has_worker) {
+					worker_iface = (LV2_Worker_Interface*)lilv_instance_get_extension_data(instances[i], LV2_WORKER__interface);
+					// XXX store handle + iface per instance ?!
+					schedule->handle = instances[i]->lv2_handle;
+				}
+
 				lilv_instance_activate(instances[i]);
 			}
 			{
@@ -681,6 +734,8 @@ int main(int argc, char** argv) {
 		lilv_node_free(latency_port);
 		lilv_node_free(atom_AtomPort);
 		lilv_node_free(atom_Sequence);
+		lilv_node_free(worker_schedule);
+		lilv_node_free(worker_iface_uri);
 
 	cleanup_argtable:
 		arg_freetable(argtable,sizeof(argtable)/sizeof(argtable[0]));
