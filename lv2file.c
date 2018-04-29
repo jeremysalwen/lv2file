@@ -30,6 +30,7 @@
 
 #include "lv2.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
+#include "lv2/lv2plug.in/ns/ext/presets/presets.h"
 #include "lv2/lv2plug.in/ns/ext/uri-map/uri-map.h"
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
 #include "lv2/lv2plug.in/ns/ext/buf-size/buf-size.h"
@@ -88,6 +89,38 @@ lv2_worker_schedule(LV2_Worker_Schedule_Handle handle,
 	return LV2_WORKER_SUCCESS;
 }
 
+/* ****************************************************************************
+ * LV2 State
+ */
+struct statehelper {
+	const LilvPlugin* plugin;
+	int               numports;
+	float*            params;
+};
+
+static void
+set_port_value(const char* port_symbol,
+               void*       user_data,
+               const void* value,
+               uint32_t    size,
+               uint32_t    type)
+{
+	if (type != 0 && type != uri_to_id(NULL, "http://lv2plug.in/ns/ext/atom#Float")) {
+		return;
+	}
+	float val = *(const float*)value;
+	//printf ("STATE set %s to %f (t: %d)\n", port_symbol, val, type);
+	struct statehelper* sh = (struct statehelper*) user_data;
+	for(uint32_t port = 0; port < sh->numports; ++port) {
+		const char* symbol = lilv_node_as_string (lilv_port_get_symbol (sh->plugin, lilv_plugin_get_port_by_index (sh->plugin, port)));
+		if (!strcmp (symbol, port_symbol)) {
+			//printf ("STATE actually set %d to %f\n", port, val);
+			sh->params[port] = val;
+			break;
+		}
+	}
+}
+
 //From lv2_simple_jack_host in slv2 (GPL code)
 void list_plugins(const LilvPlugins* list)
 {
@@ -95,9 +128,9 @@ void list_plugins(const LilvPlugins* list)
 	LILV_FOREACH(plugins,i,list) {
 		const LilvPlugin* p=lilv_plugins_get(list,i);
 		printf("%d\t%s\n", j++, lilv_node_as_uri(lilv_plugin_get_uri(p)));
-
 	}
 }
+
 const LilvPlugin* plugins_get_at(const LilvPlugins* plugins, unsigned int n) {
 	unsigned int j=0;
 	LILV_FOREACH(plugins,i,plugins) {
@@ -265,9 +298,12 @@ void process_no_check_clipping DEFINE_PROCESS
 void process_check_clipping DEFINE_PROCESS
 
 int main(int argc, char** argv) {
-	struct arg_lit *listopt=arg_lit1("l", "list","Lists all available LV2 plugins");
-	struct arg_end *listend     = arg_end(20);
-	void *listtable[] = {listopt,listend};
+	struct arg_lit *listopt = arg_lit1 ("l", "list", "Lists all available LV2 plugins");
+	struct arg_end *listend = arg_end(20);
+	void *listtable[] = {listopt, listend};
+
+	bool list_presets_only = false;
+
 	if (arg_nullcheck(listtable) != 0) {
 		printf("Error: insufficient memory\n");
 		goto cleanup_listtable;
@@ -286,6 +322,7 @@ int main(int argc, char** argv) {
 	}
 
 
+	struct arg_lit *preslistopt = arg_lit1 ("L", "list-presets", "Lists presets for given plugin LV2 plugins");
 	struct arg_lit *portnames = arg_lit1("n","nameports","List the names of the input ports of a given plugin");
 	struct arg_str *pluginname = arg_str1(NULL,NULL,"plugin",NULL);
 	struct arg_end *nameend=arg_end(20);
@@ -299,6 +336,16 @@ int main(int argc, char** argv) {
 		goto cleanup_listnamestable;
 	}
 
+	void *listpresettable[]={preslistopt,pluginname,nameend};
+	if (arg_nullcheck(listpresettable) != 0) {
+		fprintf(stderr, "Error: insufficient memory\n");
+		goto cleanup_listnamestable;
+	}
+
+	if(!arg_parse(argc,argv,listpresettable)) {
+		list_presets_only = true;
+	}
+
 	struct arg_rex *connectargs= arg_rexn("c","connect","(\\d+:(\\d+\\.)?\\w+,?)*","<int>:<audioport>",0,200,REG_EXTENDED,"Connect between audio file channels and plugin input channels.");
 
 	struct arg_file* infile = arg_file1("i", NULL,"input", "Input sound file");
@@ -306,20 +353,22 @@ int main(int argc, char** argv) {
 	struct arg_rex* controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
 	pluginname = arg_str1(NULL,NULL,"plugin","The LV2 URI of the plugin");
 	struct arg_int* blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed. This is frames, not samples.");
+	struct arg_str* presetname = arg_str0("p","preset","<name>","Plugin-preset to load (before applying custom ctrl-port values)");
 	struct arg_lit* mono = arg_lit0("m","mono","Mix all of the channels together before processing.");
 	struct arg_lit* ignore_clipping = arg_lit0(NULL,"ignore-clipping", "Do not check for clipping.  This option is slightly faster");
 	blksize->ival[0]=512;
 	struct arg_end *endarg = arg_end(20);
-	void *argtable[] = {infile, outfile,controls,connectargs,blksize,mono,ignore_clipping,pluginname, endarg};
+	void *argtable[] = {infile, outfile,presetname,controls,connectargs,blksize,mono,ignore_clipping,pluginname, endarg};
 	if (arg_nullcheck(argtable) != 0) {
 		fprintf(stderr,"Error: insufficient memory\n");
 		goto cleanup_argtable;
 	}
 	int nerrors = arg_parse(argc,argv,argtable);
-	if(nerrors) {
+	if(nerrors && !list_presets_only) {
 		arg_print_errors(stderr,endarg,"lv2file");
 		fprintf(stderr,"usage:\nlv2file\t");
 		arg_print_syntaxv(stderr, listtable,"\n\t");
+		arg_print_syntaxv(stderr, listpresettable,"\n\t");
 		arg_print_syntaxv(stderr, listnamestable,"\n\t");
 		arg_print_syntaxv(stderr, argtable,"\n");
 		arg_print_glossary_gnu(stderr, listtable);
@@ -341,13 +390,47 @@ int main(int argc, char** argv) {
 	LilvNode* audio_class = lilv_new_uri(lilvworld, LILV_URI_AUDIO_PORT);
 	LilvNode* event_class = lilv_new_uri(lilvworld, LILV_URI_EVENT_PORT);
 	LilvNode* midi_class = lilv_new_uri(lilvworld, LILV_URI_MIDI_EVENT);
+	LilvNode* preset_class = lilv_new_uri(lilvworld, LV2_PRESETS__Preset);
 	LilvNode* optional = lilv_new_uri(lilvworld, LILV_NS_LV2 "connectionOptional");
 	LilvNode* freewheel_port = lilv_new_uri(lilvworld, LV2_CORE__freeWheeling);
 	LilvNode* latency_port = lilv_new_uri(lilvworld, LV2_CORE__reportsLatency);
+	LilvNode* label_pred = lilv_new_uri(lilvworld, LILV_NS_RDFS "label");
 	LilvNode* atom_AtomPort = lilv_new_uri(lilvworld, LV2_ATOM__AtomPort);
 	LilvNode* atom_Sequence = lilv_new_uri(lilvworld, LV2_ATOM__Sequence);
 	LilvNode* worker_schedule = lilv_new_uri(lilvworld, LV2_WORKER__schedule);
 	LilvNode* worker_iface_uri = lilv_new_uri(lilvworld, LV2_WORKER__interface);
+
+	/* get plugin presets */
+	LilvState* state = NULL;
+	LilvNodes* presets = lilv_plugin_get_related(plugin, preset_class);
+	if (presets) {
+		LILV_FOREACH(nodes, i, presets) {
+			const LilvNode* preset = lilv_nodes_get(presets, i);
+			lilv_world_load_resource(lilvworld, preset);
+			LilvNodes* titles = lilv_world_find_nodes(lilvworld, preset, label_pred, NULL);
+			if (titles) {
+				const char* title = lilv_node_as_string(lilv_nodes_get_first(titles));
+				if (list_presets_only) {
+					printf("Preset: %s\n", title);
+				} else if (presetname->count > 0 && !strcmp (presetname->sval[0], title)) {
+					LV2_URID_Map uri_map = { NULL, &uri_to_id };
+					state = lilv_state_new_from_world(lilvworld, &uri_map, preset);
+					lilv_nodes_free(titles);
+					break;
+				}
+				lilv_nodes_free(titles);
+			}
+		}
+	}
+	lilv_nodes_free(presets);
+	if (list_presets_only) {
+		goto cleanup_lilvnodes;
+	}
+
+	if (presetname->count > 0 && !state) {
+		fprintf(stderr,"Preset '%s' was not found.\n",presetname->sval[0]);
+	}
+
 	SF_INFO formatinfo;
 	formatinfo.format=0;
 	SNDFILE* insndfile=sf_open(*(infile->filename), SFM_READ, &formatinfo);
@@ -548,6 +631,14 @@ int main(int argc, char** argv) {
 				}
 			}
 
+			float defaultvalues[numports];
+
+			float minvalues[numports];
+			float maxvalues[numports];
+			lilv_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
+
+			struct statehelper sh = { plugin, numports, defaultvalues };
+
 			bool has_worker = lilv_plugin_has_feature (plugin, worker_schedule) && lilv_plugin_has_extension_data(plugin, worker_iface_uri);
 
 			LV2_URID atom_Int = uri_to_id(NULL, LV2_ATOM__Int);
@@ -601,8 +692,14 @@ int main(int argc, char** argv) {
 					schedule->handle = instances[i]->lv2_handle;
 				}
 
+				if (state) {
+					lilv_state_restore (state, instances[i], set_port_value, &sh, 0, NULL);
+				}
+
 				lilv_instance_activate(instances[i]);
 			}
+			lilv_state_free(state);
+
 			{
 				float pluginbuffers[numplugins][numin][blocksize];
 				memset(pluginbuffers,0,sizeof(pluginbuffers));
@@ -613,11 +710,6 @@ int main(int argc, char** argv) {
 				memset(controlports,0,sizeof(controlports));
 				float controloutports[numcontrolout];
 
-				float minvalues[numports];
-				float maxvalues[numports];
-				float defaultvalues[numports];
-
-				lilv_plugin_get_port_ranges_float(plugin,minvalues,maxvalues,defaultvalues);
 				for(unsigned int port=0; port<numcontrol; port++) {
 					unsigned int portindex=controlindices[port];
 					controlports[port]=getstartingvalue(defaultvalues[portindex],minvalues[portindex],maxvalues[portindex]);
@@ -729,9 +821,11 @@ int main(int argc, char** argv) {
 		lilv_node_free(audio_class);
 		lilv_node_free(event_class);
 		lilv_node_free(midi_class);
+		lilv_node_free(preset_class);
 		lilv_node_free(optional);
 		lilv_node_free(freewheel_port);
 		lilv_node_free(latency_port);
+		lilv_node_free(label_pred);
 		lilv_node_free(atom_AtomPort);
 		lilv_node_free(atom_Sequence);
 		lilv_node_free(worker_schedule);
