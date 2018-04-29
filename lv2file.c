@@ -270,26 +270,41 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
  * - zero-pad _plugin_latency_samples input frames and keep processing
  */
 
-/* X-Macro */
-#define DEFINE_PROCESS (unsigned int blocksize, unsigned int numchannels, unsigned int numin, unsigned int numout, unsigned int numplugins, bool connections[numplugins][numin][numchannels], float pluginbuffers[numplugins][numin][blocksize], float outputbuffers[numplugins][numout][blocksize],LilvInstance* instances[numplugins], LV2_Atom_Sequence* seq_in, LV2_Atom_Sequence* seq_out, SNDFILE* insndfile, SNDFILE* outsndfile){\
-	float sndfilebuffer[numplugins * numout * blocksize];\
-	float buffer[numchannels * blocksize];\
-	INITIALIZE_CLIPPED()\
-	sf_count_t numread;\
-	while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{\
-		mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);\
-		for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {\
-			seq_in->atom.size  = sizeof(LV2_Atom_Sequence_Body);\
-			seq_in->atom.type  = uri_to_id(NULL, LV2_ATOM__Sequence); \
-			seq_out->atom.size = atom_capacity; \
-			seq_out->atom.type = uri_to_id(NULL, LV2_ATOM__Chunk);\
-			lilv_instance_run(instances[plugnum],blocksize);\
-		}\
-		interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);\
-		CHECK_CLIPPED()\
-		sf_writef_float(outsndfile, sndfilebuffer, numread);\
-	}\
+/* clang-format off */
+#define DEFINE_PROCESS                                                                            \
+  (unsigned int blocksize,                                                                        \
+   unsigned int numchannels,                                                                      \
+   unsigned int numin, unsigned int numout,                                                       \
+   unsigned int       numplugins,                                                                 \
+   bool               connections[numplugins][numin][numchannels],                                \
+   float              pluginbuffers[numplugins][numin][blocksize],                                \
+   float              outputbuffers[numplugins][numout][blocksize],                               \
+   LilvInstance*      instances[numplugins],                                                      \
+   LV2_Atom_Sequence* seq_in,                                                                     \
+   LV2_Atom_Sequence* seq_out,                                                                    \
+   SNDFILE*           insndfile,                                                                  \
+   SNDFILE*           outsndfile)                                                                 \
+{                                                                                                 \
+  float sndfilebuffer[numplugins * numout * blocksize];                                           \
+  float buffer[numchannels * blocksize];                                                          \
+  INITIALIZE_CLIPPED ()                                                                           \
+  sf_count_t numread;                                                                             \
+  while ((numread = sf_readf_float (insndfile, buffer, blocksize))) {                             \
+    mix (buffer, numread, numchannels, numplugins, numin, connections, blocksize, pluginbuffers); \
+    for (unsigned int plugnum = 0; plugnum < numplugins; plugnum++) {                             \
+      seq_in->atom.size  = sizeof (LV2_Atom_Sequence_Body);                                       \
+      seq_in->atom.type  = uri_to_id (NULL, LV2_ATOM__Sequence);                                  \
+      seq_out->atom.size = atom_capacity;                                                         \
+      seq_out->atom.type = uri_to_id (NULL, LV2_ATOM__Chunk);                                     \
+      lilv_instance_run (instances[plugnum], blocksize);                                          \
+    }                                                                                             \
+    interleaveoutput (numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);      \
+    CHECK_CLIPPED ()                                                                              \
+    sf_writef_float (outsndfile, sndfilebuffer, numread);                                         \
+  }                                                                                               \
 }
+/* clang-format on */
+
 
 #define INITIALIZE_CLIPPED()
 #define CHECK_CLIPPED()
@@ -297,13 +312,19 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 void process_no_check_clipping DEFINE_PROCESS
 
 #undef INITIALIZE_CLIPPED
-#define INITIALIZE_CLIPPED() char clipped=0;
+#define INITIALIZE_CLIPPED() bool clipped = 0;
 
 #undef CHECK_CLIPPED
-#define CHECK_CLIPPED() if(!clipped && clipOutput(numread*numout,sndfilebuffer)) {\
-			clipped=1;\
-			printf("WARNING: Clipping output.  Try changing parameters of the plugin to lower the output volume, or if that's not possible, try lowering the volume of the input before processing.\n");\
-		}
+/* clang-format off */
+#define CHECK_CLIPPED()                                                                        \
+if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                                 \
+  clipped = true;                                                                              \
+  printf (                                                                                     \
+      "WARNING: Clipping output.\n"                                                            \
+      "Try changing parameters of the plugin to lower the output volume, "                     \
+      "or if that's not possible, try lowering the volume of the input before processing.\n"); \
+}
+/* clang-format on */
 
 void process_check_clipping DEFINE_PROCESS
 
