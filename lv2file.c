@@ -305,7 +305,7 @@ int main(int argc, char** argv) {
 	struct arg_file* outfile = arg_file1("o", NULL,"output", "Output sound file");
 	struct arg_rex* controls = arg_rexn("p", "parameters","(\\w+:\\w+,?)*","<controlport>:<float>",0,200,REG_EXTENDED, "Pass a value to a plugin control port.");
 	pluginname = arg_str1(NULL,NULL,"plugin","The LV2 URI of the plugin");
-	struct arg_int* blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed.  This is frames, not samples.");
+	struct arg_int* blksize = arg_int0("b","blocksize","<int>","Chunk size in which the sound is processed. This is frames, not samples.");
 	struct arg_lit* mono = arg_lit0("m","mono","Mix all of the channels together before processing.");
 	struct arg_lit* ignore_clipping = arg_lit0(NULL,"ignore-clipping", "Do not check for clipping.  This option is slightly faster");
 	blksize->ival[0]=512;
@@ -713,7 +713,7 @@ int main(int argc, char** argv) {
 		}
 		cleanup_outfile:
 			if(sf_close  (outsndfile)) {
-				fprintf(stderr,"Error closing input file!\n");
+				fprintf(stderr,"Error closing output file!\n");
 			}
 	}
 
