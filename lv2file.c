@@ -131,14 +131,14 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 	for(uint32_t port=0; port<numports; port++) {
 		const LilvPort* p=lilv_plugin_get_port_by_index(plugin,port);
 		if(lilv_port_is_a(plugin,p,input_class) && lilv_port_is_a(plugin,p,audio_class)) {
-			printf("%s: %s\n",lilv_node_as_string(lilv_port_get_symbol(plugin,p)),lilv_node_as_string(lilv_port_get_name(plugin,p))); 			
+			printf("%s: %s\n",lilv_node_as_string(lilv_port_get_symbol(plugin,p)),lilv_node_as_string(lilv_port_get_name(plugin,p)));
 		}
 	}
 	printf("==Control Ports==\n");
 	for(uint32_t port=0; port<numports; port++) {
 		const LilvPort* p=lilv_plugin_get_port_by_index(plugin,port);
 		if(lilv_port_is_a(plugin,p,input_class) && lilv_port_is_a(plugin,p,control_class)) {
-			printf("%s: %s\n",lilv_node_as_string(lilv_port_get_symbol(plugin,p)),lilv_node_as_string(lilv_port_get_name(plugin,p))); 			
+			printf("%s: %s\n",lilv_node_as_string(lilv_port_get_symbol(plugin,p)),lilv_node_as_string(lilv_port_get_name(plugin,p)));
 		}
 	}
 	lilv_node_free(audio_class);
@@ -164,7 +164,7 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 }
 
 #define INITIALIZE_CLIPPED()
-#define CHECK_CLIPPED() 
+#define CHECK_CLIPPED()
 
 void process_no_check_clipping DEFINE_PROCESS
 
@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
 		goto cleanup_listtable;
 	}
 	lilv_world_load_all(lilvworld);
-	const LilvPlugins* plugins=lilv_world_get_all_plugins(lilvworld); 	
+	const LilvPlugins* plugins=lilv_world_get_all_plugins(lilvworld);
 
 	if(!arg_parse(argc,argv,listtable)) {
 		list_plugins(plugins);
@@ -283,7 +283,7 @@ int main(int argc, char** argv) {
 
 		bool portsproblem=false;
 		for(uint32_t i=0; i<numports; i++) {
-			const LilvPort* porti=lilv_plugin_get_port_by_index(plugin,i);	
+			const LilvPort* porti=lilv_plugin_get_port_by_index(plugin,i);
 			if(lilv_port_is_a(plugin,porti,audio_class)) {
 				if(lilv_port_is_a(plugin,porti,input_class)) {
 					inindices[numin++]=i;
@@ -306,7 +306,7 @@ int main(int argc, char** argv) {
 			} else if(!lilv_port_has_property(plugin,porti,optional)) {
 				fprintf(stderr,"Error!  Unable to handle a required port \n");
 				portsproblem=true;
-			} 
+			}
 		}
 
 		lilv_node_free(input_class);
@@ -337,7 +337,7 @@ int main(int argc, char** argv) {
 						char* nextcomma=strchr(connectionlist,',');
 						char* nextcolon;
 						if(nextcomma) {
-							nextcolon=memchr(connectionlist,':',nextcomma-connectionlist);	
+							nextcolon=memchr(connectionlist,':',nextcomma-connectionlist);
 						} else {
 							nextcolon=strchr(connectionlist,':');
 						}
@@ -387,11 +387,11 @@ int main(int argc, char** argv) {
 						if(channel<0|| ((unsigned)channel)>=numchannels) {
 							fprintf(stderr, "Input sound file does not have channel %u.  It has %u channels.\n",channel+1,numchannels);
 							goto cleanup_outfile;
-						}						
+						}
 
 						char* nextcomma=strchr(connectionlist,',');
 						if(nextcomma) {
-							*nextcomma=0;						
+							*nextcomma=0;
 						}
 						char* nextcolon=strchr(connectionlist,':');
 						//Will not be nill otherwise it would have been caught when counting plugin instances
@@ -443,7 +443,7 @@ int main(int argc, char** argv) {
 						for(unsigned int i=0; i<numchannels; i++) {
 							connections[i][0][i]=true;
 						}
-					} 
+					}
 				}else if(numchannels>numin) {
 					printf("Note: Extra channels ignored when mapping channels to plugin ports\n");
 					for(unsigned int i=0; i<numin; i++) {
@@ -456,7 +456,7 @@ int main(int argc, char** argv) {
 			}
 			for(unsigned int i=0; i<numplugins; i++) {
 				instances[i]=lilv_plugin_instantiate (plugin, formatinfo.samplerate , NULL);
-				lilv_instance_activate(instances[i]); 
+				lilv_instance_activate(instances[i]);
 			}
 			{
 				float pluginbuffers[numplugins][numin][blocksize];
@@ -559,8 +559,7 @@ int main(int argc, char** argv) {
 	cleanup_listnamestable:
 		arg_freetable(listnamestable,sizeof(listnamestable)/sizeof(listnamestable[0]));
 	cleanup_lilvworld:
-		lilv_world_free(lilvworld);  
+		lilv_world_free(lilvworld);
 	cleanup_listtable:
 		arg_freetable(listtable,sizeof(listtable)/sizeof(listtable[0]));
-
 }
