@@ -32,6 +32,8 @@
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
 #include "lv2/lv2plug.in/ns/ext/uri-map/uri-map.h"
 #include "lv2/lv2plug.in/ns/ext/urid/urid.h"
+#include "lv2/lv2plug.in/ns/ext/buf-size/buf-size.h"
+#include "lv2/lv2plug.in/ns/ext/options/options.h"
 
 static const size_t atom_capacity = 32768;
 
@@ -509,16 +511,31 @@ int main(int argc, char** argv) {
 				}
 			}
 
+			LV2_URID atom_Int = uri_to_id(NULL, LV2_ATOM__Int);
+			LV2_Options_Option options[] = {
+				{ LV2_OPTIONS_INSTANCE, 0, uri_to_id(NULL, LV2_BUF_SIZE__minBlockLength),
+					sizeof(int32_t), atom_Int, &blocksize },
+				{ LV2_OPTIONS_INSTANCE, 0, uri_to_id(NULL, LV2_BUF_SIZE__maxBlockLength),
+					sizeof(int32_t), atom_Int, &blocksize },
+				{ LV2_OPTIONS_INSTANCE, 0, uri_to_id(NULL, LV2_BUF_SIZE__sequenceSize),
+					sizeof(int32_t), atom_Int, &atom_capacity },
+				{ LV2_OPTIONS_INSTANCE, 0, uri_to_id(NULL, "http://lv2plug.in/ns/ext/buf-size#nominalBlockLength"),
+					sizeof(int32_t), atom_Int, &blocksize },
+				{ LV2_OPTIONS_INSTANCE, 0, 0, 0, 0, NULL }
+			};
 
 			LV2_URID_Map uri_map               = { NULL, &uri_to_id };
 			const LV2_Feature map_feature      = { LV2_URID__map, &uri_map};
 			const LV2_Feature unmap_feature    = { LV2_URID__unmap, NULL };
+			const LV2_Feature options_feature  = { LV2_OPTIONS__options, options};
+
 			for(unsigned int i=0; i<numplugins; i++) {
 
-				int n_features = 2;
+				int n_features = 3;
 				const LV2_Feature* features[5];
 				features[0] = &map_feature;
 				features[1] = &unmap_feature;
+				features[2] = &options_feature;
 
 				features[n_features] = NULL;
 				instances[i] = lilv_plugin_instantiate (plugin, formatinfo.samplerate, features);
