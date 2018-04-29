@@ -260,9 +260,17 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 	lilv_node_free(control_class);
 }
 
+/* TODO Notes:
+ * - properly zero (silence pad to blocksize) buffer at EOF
+ * - verify mix/interleave with replicated buffers (numplugins * numout == numchannels)
+ * - (do a latency compute run, set _plugin_latency_samples)
+ * - skip writing first _plugin_latency_samples to file
+ * - zero-pad _plugin_latency_samples input frames and keep processing
+ */
+
 /* X-Macro */
 #define DEFINE_PROCESS (unsigned int blocksize, unsigned int numchannels, unsigned int numin, unsigned int numout, unsigned int numplugins, bool connections[numplugins][numin][numchannels], float pluginbuffers[numplugins][numin][blocksize], float outputbuffers[numplugins][numout][blocksize],LilvInstance* instances[numplugins], LV2_Atom_Sequence* seq_in, LV2_Atom_Sequence* seq_out, SNDFILE* insndfile, SNDFILE* outsndfile){\
-	float sndfilebuffer[numout * blocksize];\
+	float sndfilebuffer[numplugins * numout * blocksize];\
 	float buffer[numchannels * blocksize];\
 	INITIALIZE_CLIPPED()\
 	sf_count_t numread;\
