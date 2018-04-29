@@ -1,6 +1,7 @@
 /* Apply an LV2 Audio Plugin to an Audio File
  *
  * Copyright (C) 2011-2014 Jeremy Salwen <jeremysalwen@gmail.com>
+ * Copyright (C) 2017 Robin Gareus <robin@gareus.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,6 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE // strdup
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sndfile.h>
@@ -24,6 +27,38 @@
 #include <string.h>
 #include <math.h>
 #include <regex.h>
+
+#include "lv2.h"
+#include "lv2/lv2plug.in/ns/ext/atom/atom.h"
+#include "lv2/lv2plug.in/ns/ext/uri-map/uri-map.h"
+#include "lv2/lv2plug.in/ns/ext/urid/urid.h"
+
+static const size_t atom_capacity = 32768;
+
+/* ****************************************************************************
+ * LV2 URI MAP
+ */
+
+static char **urimap = NULL;
+static uint32_t urimap_len = 0;
+
+static uint32_t uri_to_id(LV2_URI_Map_Callback_Data unused, const char* uri) {
+  for (uint32_t i = 0; i < urimap_len; ++i) {
+    if (!strcmp(urimap[i], uri)) {
+      return i + 1;
+    }
+  }
+  urimap = (char**) realloc(urimap, (urimap_len + 1) * sizeof(char*));
+  urimap[urimap_len] = strdup(uri);
+  return ++urimap_len;
+}
+
+static void free_uri_map() {
+  for (uint32_t i=0; i < urimap_len; ++i) {
+    free(urimap[i]);
+  }
+  free(urimap);
+}
 
 //From lv2_simple_jack_host in slv2 (GPL code)
 void list_plugins(const LilvPlugins* list)
@@ -165,7 +200,7 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 }
 
 /* X-Macro */
-#define DEFINE_PROCESS (unsigned int blocksize, unsigned int numchannels, unsigned int numin, unsigned int numout, unsigned int numplugins, bool connections[numplugins][numin][numchannels], float pluginbuffers[numplugins][numin][blocksize], float outputbuffers[numplugins][numout][blocksize],LilvInstance* instances[numplugins],SNDFILE* insndfile, SNDFILE* outsndfile){\
+#define DEFINE_PROCESS (unsigned int blocksize, unsigned int numchannels, unsigned int numin, unsigned int numout, unsigned int numplugins, bool connections[numplugins][numin][numchannels], float pluginbuffers[numplugins][numin][blocksize], float outputbuffers[numplugins][numout][blocksize],LilvInstance* instances[numplugins], LV2_Atom_Sequence* seq_in, LV2_Atom_Sequence* seq_out, SNDFILE* insndfile, SNDFILE* outsndfile){\
 	float sndfilebuffer[numout * blocksize];\
 	float buffer[numchannels * blocksize];\
 	INITIALIZE_CLIPPED()\
@@ -173,6 +208,10 @@ void list_names(LilvWorld* lilvworld, const LilvPlugins* plugins, const char* pl
 	while((numread = sf_readf_float(insndfile, buffer, blocksize)))	{\
 		mix(buffer,numread,numchannels,numplugins,numin,connections,blocksize,pluginbuffers);\
 		for(unsigned int plugnum=0; plugnum<numplugins; plugnum++) {\
+			seq_in->atom.size  = sizeof(LV2_Atom_Sequence_Body);\
+			seq_in->atom.type  = uri_to_id(NULL, LV2_ATOM__Sequence); \
+			seq_out->atom.size = atom_capacity; \
+			seq_out->atom.type = uri_to_id(NULL, LV2_ATOM__Chunk);\
 			lilv_instance_run(instances[plugnum],blocksize);\
 		}\
 		interleaveoutput(numread, numplugins, numout, blocksize, outputbuffers, sndfilebuffer);\
@@ -268,6 +307,15 @@ int main(int argc, char** argv) {
 		fprintf(stderr,"No such plugin %s\n", pluginname->sval[0]);
 		goto cleanup_argtable;
 	}
+	LilvNode* input_class = lilv_new_uri(lilvworld, LILV_URI_INPUT_PORT);
+	LilvNode* output_class = lilv_new_uri(lilvworld, LILV_URI_OUTPUT_PORT);
+	LilvNode* control_class = lilv_new_uri(lilvworld, LILV_URI_CONTROL_PORT);
+	LilvNode* audio_class = lilv_new_uri(lilvworld, LILV_URI_AUDIO_PORT);
+	LilvNode* event_class = lilv_new_uri(lilvworld, LILV_URI_EVENT_PORT);
+	LilvNode* midi_class = lilv_new_uri(lilvworld, LILV_URI_MIDI_EVENT);
+	LilvNode* optional = lilv_new_uri(lilvworld, LILV_NS_LV2 "connectionOptional");
+	LilvNode* atom_AtomPort = lilv_new_uri(lilvworld, LV2_ATOM__AtomPort);
+	LilvNode* atom_Sequence = lilv_new_uri(lilvworld, LV2_ATOM__Sequence);
 	SF_INFO formatinfo;
 	formatinfo.format=0;
 	SNDFILE* insndfile=sf_open(*(infile->filename), SFM_READ, &formatinfo);
@@ -280,13 +328,6 @@ int main(int argc, char** argv) {
 	unsigned int numchannels=formatinfo.channels;
 	unsigned int blocksize=blksize->ival[0];
 
-	LilvNode* input_class = lilv_new_uri(lilvworld, LILV_URI_INPUT_PORT);
-	LilvNode* output_class = lilv_new_uri(lilvworld, LILV_URI_OUTPUT_PORT);
-	LilvNode* control_class = lilv_new_uri(lilvworld, LILV_URI_CONTROL_PORT);
-	LilvNode* audio_class = lilv_new_uri(lilvworld, LILV_URI_AUDIO_PORT);
-	LilvNode* event_class = lilv_new_uri(lilvworld, LILV_URI_EVENT_PORT);
-	LilvNode* midi_class = lilv_new_uri(lilvworld, LILV_URI_MIDI_EVENT);
-	LilvNode* optional = lilv_new_uri(lilvworld, LILV_NS_LV2 "connectionOptional");
 
 	{
 		uint32_t numports=lilv_plugin_get_num_ports(plugin);
@@ -321,19 +362,14 @@ int main(int argc, char** argv) {
 					fprintf(stderr, "Control port not input or output\n");
 					portsproblem=true;
 				}
+			} else if(lilv_port_is_a(plugin,porti,atom_AtomPort)) {
+				/* OK, handled later */
 			} else if(!lilv_port_has_property(plugin,porti,optional)) {
 				fprintf(stderr,"Error!  Unable to handle a required port \n");
 				portsproblem=true;
 			}
 		}
 
-		lilv_node_free(input_class);
-		lilv_node_free(output_class);
-		lilv_node_free(control_class);
-		lilv_node_free(audio_class);
-		lilv_node_free(event_class);
-		lilv_node_free(midi_class);
-		lilv_node_free(optional);
 		if(portsproblem) {
 			goto cleanup_sndfile;
 		}
@@ -472,8 +508,20 @@ int main(int argc, char** argv) {
 					goto cleanup_outfile;
 				}
 			}
+
+
+			LV2_URID_Map uri_map               = { NULL, &uri_to_id };
+			const LV2_Feature map_feature      = { LV2_URID__map, &uri_map};
+			const LV2_Feature unmap_feature    = { LV2_URID__unmap, NULL };
 			for(unsigned int i=0; i<numplugins; i++) {
-				instances[i]=lilv_plugin_instantiate (plugin, formatinfo.samplerate , NULL);
+
+				int n_features = 2;
+				const LV2_Feature* features[5];
+				features[0] = &map_feature;
+				features[1] = &unmap_feature;
+
+				features[n_features] = NULL;
+				instances[i] = lilv_plugin_instantiate (plugin, formatinfo.samplerate, features);
 				lilv_instance_activate(instances[i]);
 			}
 			{
@@ -534,6 +582,13 @@ int main(int argc, char** argv) {
 					}
 				}
 
+				LV2_Atom_Sequence seq_in = {
+					{ sizeof(LV2_Atom_Sequence_Body),
+						uri_to_id(NULL, LV2_ATOM__Sequence) },
+					{ 0, 0 } };
+
+				LV2_Atom_Sequence* seq_out = (LV2_Atom_Sequence*)malloc(sizeof(LV2_Atom_Sequence) + atom_capacity);
+
 				for(unsigned int i=0; i<numplugins; i++) {
 					for(unsigned int port=0; port<numin; port++) {
 						lilv_instance_connect_port(instances[i],inindices[port],pluginbuffers[i][port]);
@@ -547,11 +602,22 @@ int main(int argc, char** argv) {
 					for(unsigned int port=0; port<numcontrolout; port++) {
 						lilv_instance_connect_port(instances[i],controloutindices[port],&controloutports[port]);
 					}
+
+					for(uint32_t j = 0; j < numports; j++) {
+						const LilvPort* porti = lilv_plugin_get_port_by_index(plugin, j);
+						if(lilv_port_is_a (plugin, porti, atom_AtomPort)) {
+							if(lilv_port_is_a(plugin, porti, input_class)) {
+								lilv_instance_connect_port (instances[i], j, &seq_in);
+							} else {
+								lilv_instance_connect_port (instances[i], j, seq_out);
+							}
+						}
+					}
 				}
 				if(ignore_clipping->count) {
-					process_no_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, insndfile, outsndfile);
+					process_no_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, &seq_in, seq_out, insndfile, outsndfile);
 				} else {
-					process_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, insndfile, outsndfile);
+					process_check_clipping(blocksize, numchannels, numin, numout, numplugins, connections, pluginbuffers, outputbuffers, instances, &seq_in, seq_out, insndfile, outsndfile);
 				}
 			}
 
@@ -572,6 +638,17 @@ int main(int argc, char** argv) {
 			fprintf(stderr,"Error closing input file!\n");
 		}
 
+	cleanup_lilvnodes:
+		lilv_node_free(input_class);
+		lilv_node_free(output_class);
+		lilv_node_free(control_class);
+		lilv_node_free(audio_class);
+		lilv_node_free(event_class);
+		lilv_node_free(midi_class);
+		lilv_node_free(optional);
+		lilv_node_free(atom_AtomPort);
+		lilv_node_free(atom_Sequence);
+
 	cleanup_argtable:
 		arg_freetable(argtable,sizeof(argtable)/sizeof(argtable[0]));
 	cleanup_listnamestable:
@@ -580,4 +657,6 @@ int main(int argc, char** argv) {
 		lilv_world_free(lilvworld);
 	cleanup_listtable:
 		arg_freetable(listtable,sizeof(listtable)/sizeof(listtable[0]));
+
+	free_uri_map ();
 }
