@@ -1,3 +1,30 @@
+lv2file (0.84-1) unstable; urgency=medium
+
+  * Team upload
+
+  [ Felipe Sateler ]
+  * Change maintainer address to debian-multimedia@lists.debian.org
+
+  [ Ondřej Nový ]
+  * d/control: Set Vcs-* to salsa.debian.org
+  * d/copyright: Use https protocol in Format field
+
+  [ Dennis Braun ]
+  * New upstream release (Closes: #852439)
+    + Allow piping raw FP audio from stdin to stdout (Closes: #776244)
+  * d/control:
+    + Use dh-compat instead of debian/compat
+    + Bump dh-compat to 12
+    + Bump Standards-Version to 4.5.0
+    + Use https protocol for homepage
+    + Set RRR: no
+  * d/copyright:
+    + Update source url
+    + Update year
+    + http > https
+
+ -- Dennis Braun <d_braun@kabelmail.de>  Tue, 03 Feb 2020 17:55:55 +0100
+
 lv2file (0.83-1) unstable; urgency=low
 
   [ Jeremy Salwen ]
