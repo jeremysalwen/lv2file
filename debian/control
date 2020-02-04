@@ -6,7 +6,7 @@ Uploaders:
  Alessio Treglia <alessio@debian.org>,
  Jeremy Salwen <jeremysalwen@gmail.com>
 Build-Depends:
- debhelper (>= 7.0.50~),
+ debhelper-compat (= 12),
  libargtable2-dev,
  liblilv-dev,
  libsndfile-dev,
