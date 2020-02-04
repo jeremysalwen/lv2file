@@ -2,7 +2,7 @@ Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: lv2file
 Upstream-Contact: Jeremy Salwen <jeremysalwen@gmail.com>
 Source:
- http://git.debian.org/?p=pkg-multimedia/lv2file.git;a=shortlog;h=refs/heads/UPSTREAM.trunk
+ https://github.com/jeremysalwen/lv2file/releases
 
 Files: *
 Copyright: 2010 Jeremy Salwen
