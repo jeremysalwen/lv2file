@@ -5,7 +5,7 @@ Source:
  https://github.com/jeremysalwen/lv2file/releases
 
 Files: *
-Copyright: 2010 Jeremy Salwen
+Copyright: 2010-2014 Jeremy Salwen
 License: GPL-2+
 
 Files: debian/*
@@ -29,4 +29,4 @@ Comment:
  Public License can be found in `/usr/share/common-licenses/GPL-2'.
  .
  You should have received a copy of the GNU General Public License
- along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
