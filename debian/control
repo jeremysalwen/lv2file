@@ -12,7 +12,7 @@ Build-Depends:
  libsndfile-dev,
  lv2-dev
 Standards-Version: 4.5.0
-Homepage: http://jeremysalwen.github.com/lv2file/
+Homepage: https://jeremysalwen.github.com/lv2file/
 Vcs-Git: https://salsa.debian.org/multimedia-team/lv2file.git
 Vcs-Browser: https://salsa.debian.org/multimedia-team/lv2file
 
