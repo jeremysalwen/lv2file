@@ -15,6 +15,7 @@ Standards-Version: 4.5.0
 Homepage: https://jeremysalwen.github.com/lv2file/
 Vcs-Git: https://salsa.debian.org/multimedia-team/lv2file.git
 Vcs-Browser: https://salsa.debian.org/multimedia-team/lv2file
+Rules-Requires-Root: no
 
 Package: lv2file
 Architecture: any
