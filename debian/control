@@ -3,6 +3,7 @@ Section: sound
 Priority: optional
 Maintainer: Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>
 Uploaders:
+ Dennis Braun <d_braun@kabelmail.de>,
  Alessio Treglia <alessio@debian.org>,
  Jeremy Salwen <jeremysalwen@gmail.com>
 Build-Depends:

@@ -1,7 +1,5 @@
 lv2file (0.84-1) unstable; urgency=medium
 
-  * Team upload
-
   [ Felipe Sateler ]
   * Change maintainer address to debian-multimedia@lists.debian.org
 
@@ -16,6 +14,7 @@ lv2file (0.84-1) unstable; urgency=medium
     + Use dh-compat instead of debian/compat
     + Bump dh-compat to 12
     + Bump Standards-Version to 4.5.0
+    + Add me as uploader
     + Use https protocol for homepage
     + Set RRR: no
   * d/copyright:
@@ -23,7 +22,7 @@ lv2file (0.84-1) unstable; urgency=medium
     + Update year
     + http > https
 
- -- Dennis Braun <d_braun@kabelmail.de>  Tue, 03 Feb 2020 17:55:55 +0100
+ -- Dennis Braun <d_braun@kabelmail.de>  Wed, 05 Feb 2020 20:27:55 +0100
 
 lv2file (0.83-1) unstable; urgency=low
 
