@@ -1,3 +1,10 @@
+lv2file (0.9-1) unstable; urgency=low
+
+  * Imported Upstream version 0.84
+  * New upstream version 0.9
+
+ -- Jeremy Salwen <jeremysalwen@gmail.com>  Fri, 14 Jan 2022 03:44:10 -0500
+
 lv2file (0.83-1) unstable; urgency=low
 
   [ Jeremy Salwen ]
