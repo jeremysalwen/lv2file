@@ -1,1 +1,2 @@
 fix_debug_build.diff
+0002-dont_hardcode_pkg-config.patch
