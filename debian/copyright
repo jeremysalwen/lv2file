@@ -5,7 +5,8 @@ Source:
  https://github.com/jeremysalwen/lv2file/tags
 
 Files: *
-Copyright: 2010-2022 Jeremy Salwen
+Copyright: 2010-2022 Jeremy Salwen <jeremysalwen@gmail.com>
+           2017, Robin Gareus <robin@gareus.org>
 License: GPL-3+
 
 Files: debian/*
