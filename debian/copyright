@@ -10,6 +10,7 @@ License: GPL-2+
 
 Files: debian/*
 Copyright:
+ 2020-2022 Dennis Braun <d_braun@kabelmail.de>
  2011-2012 Alessio Treglia <alessio@debian.org>
  2010 Jeremy Salwen <jeremysalwen@gmail.com>
 License: GPL-2+
