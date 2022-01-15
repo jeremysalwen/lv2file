@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Author: Dennis Braun <d_braun@kabelmail.de>
+# Simple tests with lv2file and zam-plugins
+
+set -e
+
+echo '(1/2) Copy beats.wav from csound-doc'
+cp /usr/share/doc/csound-doc/html/examples/beats.wav.gz .
+gunzip beats.wav.gz
+
+echo '(2/2) Use ZamAutoSat with lv2file'
+ZamAutoSat=$(lv2file -l | grep ZamAutoSat | awk '{print $1}')
+lv2file -i beats.wav -o beats_autosat.wav $ZamAutoSat
