@@ -1,4 +1,4 @@
-lv2file (0.91-1) UNRELEASED; urgency=medium
+lv2file (0.91-1) unstable; urgency=medium
 
   * New upstream version 0.91
   * Bump dh-compat to 13
@@ -14,7 +14,7 @@ lv2file (0.91-1) UNRELEASED; urgency=medium
   * Add salsa ci config
   * Update d/watch file, we use now tags instead of releases
 
- -- Dennis Braun <d_braun@kabelmail.de>  Sat, 15 Jan 2022 20:21:53 +0100
+ -- Dennis Braun <d_braun@kabelmail.de>  Sat, 15 Jan 2022 21:03:29 +0100
 
 lv2file (0.84-1) unstable; urgency=medium
 
