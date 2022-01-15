@@ -3,8 +3,10 @@ lv2file (0.91-1) unstable; urgency=medium
   * New upstream version 0.91
   * Bump dh-compat to 13
   * Bump Standards-Version to 4.6.0
-  * d/copyright: Update source url
-  * d/copyright: Add myself to the d/ section
+  * d/copyright:
+    + Switch to GPLv3+
+    + Update source url
+    + Add myself to the d/ section
   * Add README to d/docs
   * Add hardening
   * Do not hardcode pkg-config
@@ -14,7 +16,7 @@ lv2file (0.91-1) unstable; urgency=medium
   * Add salsa ci config
   * Update d/watch file, we use now tags instead of releases
 
- -- Dennis Braun <d_braun@kabelmail.de>  Sat, 15 Jan 2022 21:03:29 +0100
+ -- Dennis Braun <d_braun@kabelmail.de>  Sat, 15 Jan 2022 21:13:17 +0100
 
 lv2file (0.84-1) unstable; urgency=medium
 
