@@ -1,3 +1,21 @@
+lv2file (0.91-1) UNRELEASED; urgency=medium
+
+  * New upstream version 0.91
+  * Bump dh-compat to 13
+  * Bump Standards-Version to 4.6.0
+  * d/copyright: Update source url
+  * d/copyright: Add myself to the d/ section
+  * Add README to d/docs
+  * Add hardening
+  * Do not hardcode pkg-config
+  * Rename fix debug patch
+  * Add an autopkgtest with lv2file and AutoSat from ZamPlugins
+  * Add d/upstream/metadata
+  * Add salsa ci config
+  * Update d/watch file, we use now tags instead of releases
+
+ -- Dennis Braun <d_braun@kabelmail.de>  Sat, 15 Jan 2022 20:21:53 +0100
+
 lv2file (0.84-1) unstable; urgency=medium
 
   [ Felipe Sateler ]
