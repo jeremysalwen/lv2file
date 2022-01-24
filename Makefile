@@ -1,5 +1,6 @@
 PKG_CONFIG?= pkg-config
-CFLAGS = -O3 -Wall -Wextra --std=c99 `$(PKG_CONFIG) --cflags argtable2 sndfile lilv-0`
+CFLAGS += $(CPPFLAGS)
+CFLAGS += -O3 -Wall -Wextra --std=c99 `$(PKG_CONFIG) --cflags argtable2 sndfile lilv-0`
 LDLIBS = `$(PKG_CONFIG) --libs argtable2 sndfile lilv-0` -lm
 BINDIR = $(DESTDIR)/usr/bin
 INSTALL_PROGRAM = install
