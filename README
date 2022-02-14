@@ -21,6 +21,9 @@ lv2file --nameports PLUGIN
 lv2file -i IFILE -o OFILE -c CHANNEL:PORT -p PORT:VALUE PLUGIN
   * Applies the PLUGIN to to IFILE and outputs the results to OFILE. 
 
+lv2file -i - -o - -r RATE -n CHANNELS -c CHANNEL:PORT -p PORT:VALUE PLUGIN
+  * read raw 32-bit floating point samples of sample rate RATE and CHANNELS from stdin and output to stdout.
+
 
 ## Example 
     lv2file -c 1:voice -p pitch_correction:1 -i speechsample.wav -o outfile.wav http://hyperglitch.com/dev/VocProc
@@ -66,3 +69,10 @@ By default, lv2file will check every sample for clipping and will warn the user 
 
 ### -P
 The -P option, or --preset is used to specify a plugin preset to load (before applying control port values).
+
+### -n
+The option -n should be used to specify the input/output channel count to read from stdin and write to stdout.  This must be combined with -r/--rate
+
+### -r
+The option -r should be used to specify the input/output sample rate when reading from stdin and writing to stdout.  This must be combined with -n/--channels.
+

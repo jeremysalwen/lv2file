@@ -1,7 +1,8 @@
 /* Apply an LV2 Audio Plugin to an Audio File
  *
- * Copyright (C) 2011-2014 Jeremy Salwen <jeremysalwen@gmail.com>
+ * Copyright (C) 2011-2022 Jeremy Salwen <jeremysalwen@gmail.com>
  * Copyright (C) 2017 Robin Gareus <robin@gareus.org>
+ * Copyright (C) 2022 Dennis Braun <d_braun@kabelmail.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd>
 
 #include "lv2.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
@@ -404,6 +406,8 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 
 	struct arg_file* infile         = arg_file1 ("i", NULL, "input", "Input sound file");
 	struct arg_file* outfile        = arg_file1 ("o", NULL, "output", "Output sound file");
+	struct arg_int* rate            = arg_int0("r", "--rate", "<int>", "sample rate for raw float data");
+	struct arg_int* channels        = arg_int0("n", "--channels", "<int>", "channel count for raw float data");
 	struct arg_rex*  controls       = arg_rexn ("p", "parameters", "(\\w+:\\w+,?)*", "<controlport>:<float>", 0, 200, REG_EXTENDED, "Pass a value to a plugin control port.");
 	pluginname                      = arg_str1 (NULL, NULL, "plugin", "The LV2 URI of the plugin");
 	struct arg_int* blksize         = arg_int0 ("b", "blocksize", "<int>", "Chunk size in which the sound is processed. This is frames, not samples.");
@@ -411,8 +415,10 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 	struct arg_lit* mono            = arg_lit0 ("m", "mono", "Mix all of the channels together before processing.");
 	struct arg_lit* ignore_clipping = arg_lit0 (NULL, "ignore-clipping", "Do not check for clipping.  This option is slightly faster");
 	blksize->ival[0]                = 512;
+	rate->ival[0]                   = -1;
+    channels->ival[0]               = -1; 
 	struct arg_end* endarg          = arg_end (20);
-	void*           argtable[]      = { infile, outfile, presetname, controls, connectargs, blksize, mono, ignore_clipping, pluginname, endarg };
+	void*           argtable[]      = { infile, outfile, rate, channels, presetname, controls, connectargs, blksize, mono, ignore_clipping, pluginname, endarg };
 	if (arg_nullcheck (argtable) != 0) {
 		fprintf (stderr, "Error: insufficient memory\n");
 		goto cleanup_argtable;
@@ -430,6 +436,11 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 		arg_print_glossary_gnu (stderr, argtable);
 		goto cleanup_argtable;
 	}
+    bool dopipe=(rate->ival[0]>0 && channels->ival[0]>0);
+    if ((rate->ival[0]<0) != (channels->ival[0]<0)) {
+        fprintf(stderr,"--rate/-r and --channels/-n must both be specified or not at all");
+        goto cleanup_argtable;
+    }
 
 	bool mixdown = mono->count;
 
@@ -488,7 +499,18 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 
 	SF_INFO formatinfo;
 	formatinfo.format   = 0;
-	SNDFILE* insndfile  = sf_open (*(infile->filename), SFM_READ, &formatinfo);
+	SNDFILE* insndfile;
+	if (dopipe) {
+		memset(&formatinfo, 0, sizeof(SF_INFO));
+		formatinfo.format=SF_FORMAT_FLOAT | SF_FORMAT_RAW | SF_ENDIAN_CPU;
+		formatinfo.samplerate=rate->ival[0];
+		formatinfo.channels=channels->ival[0];
+	}
+	if (dopipe && !strcmp(*(infile->filename),"-")) {
+		insndfile=sf_open_fd(STDIN_FILENO, SFM_READ, &formatinfo, 0);
+	} else {
+		insndfile=sf_open(*(infile->filename), SFM_READ, &formatinfo);
+	}
 	int      sndfileerr = sf_error (insndfile);
 	if (sndfileerr) {
 		fprintf (stderr, "Error reading input file: %s\n", sf_error_number (sndfileerr));
@@ -550,8 +572,13 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 			goto cleanup_sndfile;
 		}
 		formatinfo.channels = numout;
-		SNDFILE* outsndfile = sf_open (*(outfile->filename), SFM_WRITE, &formatinfo);
-
+		SNDFILE* outsndfile;
+		if (dopipe && !strcmp(*(outfile->filename),"-")) {
+			outsndfile=sf_open_fd(STDOUT_FILENO, SFM_WRITE, &formatinfo, 0);
+		} else {
+			outsndfile=sf_open(*(outfile->filename), SFM_WRITE, &formatinfo);
+		}
+		
 		sndfileerr = sf_error (outsndfile);
 		if (sndfileerr) {
 			fprintf (stderr, "Error reading output file: %s\n", sf_error_number (sndfileerr));
