@@ -2,7 +2,7 @@
 .\" First parameter, NAME, should be all caps
 .\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
 .\" other parameters are allowed: see man(7), man(1)
-.TH LV2FILE 1 "March 14, 2011"
+.TH LV2FILE 1 "February 14, 2022"
 .\" Please adjust this date whenever revising the manpage.
 .\"
 .\" Some roff macros, for reference:
@@ -63,6 +63,14 @@ Input the audio from a given FILE.  Most common sampled audio formats are suppor
 .TP
 .B \-o \fIFILE\fR
 Output to given FILE.
+If "-" is given and "--channels" and "--rate" are both specified, then output
+will be written as raw, 32-bit floating point samples to stdout.
+.TP
+.B \-n, \-\-channels \fICHANNELS\fR
+Specify the channel count when reading from stdin and writing to stdout.
+.TP
+.B \-r, \-\-rate \fIRATE\fR
+Specify the sample rate reading from stdin and writing to stdout.
 .TP
 .B \-c, \-\-connect \fICHANNEL\fR:\fIPORT\fR
 Connect the channel CHANNEL in the input file to the audio port PORT of the plugin.
