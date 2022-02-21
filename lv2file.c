@@ -1,7 +1,8 @@
 /* Apply an LV2 Audio Plugin to an Audio File
  *
- * Copyright (C) 2011-2014 Jeremy Salwen <jeremysalwen@gmail.com>
+ * Copyright (C) 2011-2022 Jeremy Salwen <jeremysalwen@gmail.com>
  * Copyright (C) 2017 Robin Gareus <robin@gareus.org>
+ * Copyright (C) 2022 Dennis Braun <d_braun@kabelmail.de>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "lv2.h"
 #include "lv2/lv2plug.in/ns/ext/atom/atom.h"
@@ -358,14 +360,19 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 	void*           listtable[] = { listopt, listend };
 
 	bool list_presets_only = false;
+	// Return code for the program.
+	bool errorcode = 0;
 
 	if (arg_nullcheck (listtable) != 0) {
 		printf ("Error: insufficient memory\n");
+		errorcode = 1;
 		goto cleanup_listtable;
 	}
 
 	LilvWorld* lilvworld = lilv_world_new ();
 	if (lilvworld == NULL) {
+		printf ("Error: failed to instantiate Lilv World\n");
+		errorcode = 2;
 		goto cleanup_listtable;
 	}
 	lilv_world_load_all (lilvworld);
@@ -373,6 +380,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 
 	if (!arg_parse (argc, argv, listtable)) {
 		list_plugins (plugins);
+		errorcode = 3;
 		goto cleanup_lilvworld;
 	}
 
@@ -383,16 +391,19 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 	void*           listnamestable[] = { portnames, pluginname, nameend };
 	if (arg_nullcheck (listnamestable) != 0) {
 		fprintf (stderr, "Error: insufficient memory\n");
+		errorcode = 4;
 		goto cleanup_listnamestable;
 	}
 	if (!arg_parse (argc, argv, listnamestable)) {
 		list_names (lilvworld, plugins, pluginname->sval[0]);
+		errorcode = 5;
 		goto cleanup_listnamestable;
 	}
 
 	void* listpresettable[] = { preslistopt, pluginname, nameend };
 	if (arg_nullcheck (listpresettable) != 0) {
 		fprintf (stderr, "Error: insufficient memory\n");
+		errorcode = 6;
 		goto cleanup_listnamestable;
 	}
 
@@ -404,6 +415,8 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 
 	struct arg_file* infile         = arg_file1 ("i", NULL, "input", "Input sound file");
 	struct arg_file* outfile        = arg_file1 ("o", NULL, "output", "Output sound file");
+	struct arg_int* rate            = arg_int0("r", "--rate", "<int>", "sample rate for raw float data");
+	struct arg_int* channels        = arg_int0("n", "--channels", "<int>", "channel count for raw float data");
 	struct arg_rex*  controls       = arg_rexn ("p", "parameters", "(\\w+:\\w+,?)*", "<controlport>:<float>", 0, 200, REG_EXTENDED, "Pass a value to a plugin control port.");
 	pluginname                      = arg_str1 (NULL, NULL, "plugin", "The LV2 URI of the plugin");
 	struct arg_int* blksize         = arg_int0 ("b", "blocksize", "<int>", "Chunk size in which the sound is processed. This is frames, not samples.");
@@ -411,10 +424,13 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 	struct arg_lit* mono            = arg_lit0 ("m", "mono", "Mix all of the channels together before processing.");
 	struct arg_lit* ignore_clipping = arg_lit0 (NULL, "ignore-clipping", "Do not check for clipping.  This option is slightly faster");
 	blksize->ival[0]                = 512;
+	rate->ival[0]                   = -1;
+    channels->ival[0]               = -1; 
 	struct arg_end* endarg          = arg_end (20);
-	void*           argtable[]      = { infile, outfile, presetname, controls, connectargs, blksize, mono, ignore_clipping, pluginname, endarg };
+	void*           argtable[]      = { infile, outfile, rate, channels, presetname, controls, connectargs, blksize, mono, ignore_clipping, pluginname, endarg };
 	if (arg_nullcheck (argtable) != 0) {
 		fprintf (stderr, "Error: insufficient memory\n");
+		errorcode = 7;
 		goto cleanup_argtable;
 	}
 	int nerrors = arg_parse (argc, argv, argtable);
@@ -428,14 +444,22 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 		arg_print_glossary_gnu (stderr, listtable);
 		arg_print_glossary_gnu (stderr, listnamestable);
 		arg_print_glossary_gnu (stderr, argtable);
+		errorcode = 8;
 		goto cleanup_argtable;
 	}
+    bool dopipe=(rate->ival[0]>0 && channels->ival[0]>0);
+    if ((rate->ival[0]<0) != (channels->ival[0]<0)) {
+        fprintf(stderr,"--rate/-r and --channels/-n must both be specified or not at all");
+		errorcode = 9;
+        goto cleanup_argtable;
+    }
 
 	bool mixdown = mono->count;
 
 	const LilvPlugin* plugin = getplugin (pluginname->sval[0], plugins, lilvworld);
 	if (!plugin) {
 		fprintf (stderr, "No such plugin %s\n", pluginname->sval[0]);
+		errorcode = 10;
 		goto cleanup_argtable;
 	}
 	LilvNode* input_class      = lilv_new_uri (lilvworld, LILV_URI_INPUT_PORT);
@@ -484,14 +508,28 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 
 	if (presetname->count > 0 && !state) {
 		fprintf (stderr, "Preset '%s' was not found.\n", presetname->sval[0]);
+		errorcode = 11;
+		goto cleanup_lilvnodes;
 	}
 
 	SF_INFO formatinfo;
 	formatinfo.format   = 0;
-	SNDFILE* insndfile  = sf_open (*(infile->filename), SFM_READ, &formatinfo);
+	SNDFILE* insndfile;
+	if (dopipe) {
+		memset(&formatinfo, 0, sizeof(SF_INFO));
+		formatinfo.format=SF_FORMAT_FLOAT | SF_FORMAT_RAW | SF_ENDIAN_CPU;
+		formatinfo.samplerate=rate->ival[0];
+		formatinfo.channels=channels->ival[0];
+	}
+	if (dopipe && !strcmp(*(infile->filename),"-")) {
+		insndfile=sf_open_fd(STDIN_FILENO, SFM_READ, &formatinfo, 0);
+	} else {
+		insndfile=sf_open(*(infile->filename), SFM_READ, &formatinfo);
+	}
 	int      sndfileerr = sf_error (insndfile);
 	if (sndfileerr) {
 		fprintf (stderr, "Error reading input file: %s\n", sf_error_number (sndfileerr));
+		errorcode = 12;
 		goto cleanup_sndfile;
 	}
 
@@ -509,7 +547,6 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 		unsigned int numcontrolout = 0;
 		uint32_t     controloutindices[numports];
 
-		bool portsproblem  = false;
 		int  fwheelportidx = -1;
 		for (uint32_t i = 0; i < numports; i++) {
 			const LilvPort* porti = lilv_plugin_get_port_by_index (plugin, i);
@@ -520,7 +557,8 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 					outindices[numout++] = i;
 				} else {
 					fprintf (stderr, "Audio port not input or output\n");
-					portsproblem = true;
+					errorcode = 13;
+					goto cleanup_sndfile;
 				}
 			} else if (lilv_port_is_a (plugin, porti, control_class)) {
 				//We really only care about *input* control ports.
@@ -536,25 +574,30 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 					controloutindices[numcontrolout++] = i;
 				} else {
 					fprintf (stderr, "Control port not input or output\n");
-					portsproblem = true;
+					errorcode = 14;
+					goto cleanup_sndfile;
 				}
 			} else if (lilv_port_is_a (plugin, porti, atom_AtomPort)) {
 				/* OK, handled later */
 			} else if (!lilv_port_has_property (plugin, porti, optional)) {
 				fprintf (stderr, "Error!  Unable to handle a required port \n");
-				portsproblem = true;
+				errorcode = 15;
+				goto cleanup_sndfile;
 			}
 		}
 
-		if (portsproblem) {
-			goto cleanup_sndfile;
-		}
 		formatinfo.channels = numout;
-		SNDFILE* outsndfile = sf_open (*(outfile->filename), SFM_WRITE, &formatinfo);
-
+		SNDFILE* outsndfile;
+		if (dopipe && !strcmp(*(outfile->filename),"-")) {
+			outsndfile=sf_open_fd(STDOUT_FILENO, SFM_WRITE, &formatinfo, 0);
+		} else {
+			outsndfile=sf_open(*(outfile->filename), SFM_WRITE, &formatinfo);
+		}
+		
 		sndfileerr = sf_error (outsndfile);
 		if (sndfileerr) {
 			fprintf (stderr, "Error reading output file: %s\n", sf_error_number (sndfileerr));
+			errorcode = 16;
 			goto cleanup_outfile;
 		}
 
@@ -573,6 +616,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 						}
 						if (!nextcolon) {
 							fprintf (stderr, "Error parsing connection:  Expected colon between channel and port.\n");
+							errorcode = 17;
 							goto cleanup_outfile;
 						}
 						nextcolon++;
@@ -585,6 +629,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 							pluginstance                      = atoi (tmpbuffer) - 1;
 							if (pluginstance < 0) {
 								fprintf (stderr, "Invalid plugin instance specified");
+								errorcode = 18;
 								goto cleanup_outfile;
 							}
 						} else {
@@ -608,7 +653,6 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 			bool connections[numplugins][numin][numchannels];
 			memset (connections, 0, sizeof (connections));
 
-			LilvInstance* instances[numplugins];
 			if (connectargs->count) {
 				for (int i = 0; i < connectargs->count; i++) {
 					const char* connectionlist = connectargs->sval[i];
@@ -616,6 +660,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 						int channel = atoi (connectionlist) - 1;
 						if (channel < 0 || ((unsigned)channel) >= numchannels) {
 							fprintf (stderr, "Input sound file does not have channel %u.  It has %u channels.\n", channel + 1, numchannels);
+							errorcode = 19;
 							goto cleanup_outfile;
 						}
 
@@ -647,6 +692,8 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 						}
 						if (!foundmatch) {
 							fprintf (stderr, "Port with symbol %s does not exist.\n", nextcolon);
+							errorcode = 20;
+							goto cleanup_outfile;
 						}
 						if (nextcomma) {
 							connectionlist = nextcomma + 1;
@@ -681,6 +728,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 					}
 				} else {
 					fprintf (stderr, "Error: Not enough input channels to connect all of the plugin's ports.  Please manually specify connections\n");
+					errorcode = 21;
 					goto cleanup_outfile;
 				}
 			}
@@ -708,6 +756,8 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 				{ LV2_OPTIONS_INSTANCE, 0, 0, 0, 0, NULL }
 			};
 
+			LilvInstance* instances[numplugins];
+			
 			LV2_URID_Map      uri_map         = { NULL, &uri_to_id };
 			const LV2_Feature map_feature     = { LV2_URID__map, &uri_map };
 			const LV2_Feature unmap_feature   = { LV2_URID__unmap, NULL };
@@ -736,6 +786,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 
 				if (!instances[i]) {
 					fprintf (stderr, "Failed to instantiate plugin!\n");
+					errorcode = 22;
 					goto cleanup_outfile;
 				}
 
@@ -785,7 +836,8 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 								*nextcolon = 0;
 							} else {
 								fprintf (stderr, "Error parsing parameters:  Expected colon between port and value.\n");
-								goto cleanup_outfile;
+								errorcode = 23;
+								goto cleanup_lv2;
 							}
 							nextcolon++;
 							float value      = strtof (nextcolon, NULL);
@@ -800,7 +852,9 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 								}
 							}
 							if (!foundmatch) {
-								fprintf (stderr, "WARNING: Port with symbol %s does not exist.\n", parameters);
+								fprintf (stderr, "Error: Port with symbol %s does not exist.\n", parameters);
+								errorcode = 24;
+								goto cleanup_lv2;
 							}
 							if (nextcomma) {
 								parameters = nextcomma + 1;
@@ -851,7 +905,7 @@ if(!clipped && clipOutput (numread * numout, sndfilebuffer)) {                  
 				}
 			}
 
-			//cleanup_lv2:
+			cleanup_lv2:
 			for (unsigned int i = 0; i < numplugins; i++) {
 				lilv_instance_deactivate (instances[i]);
 				lilv_instance_free (instances[i]);
@@ -895,4 +949,5 @@ cleanup_listtable:
 	arg_freetable (listtable, sizeof (listtable) / sizeof (listtable[0]));
 
 	free_uri_map ();
+	return errorcode;
 }
